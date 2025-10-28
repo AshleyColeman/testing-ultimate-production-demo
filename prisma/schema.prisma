@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Note: The Ultimate Production Demo creates schemas and tables dynamically
+// This file is kept minimal since the demo doesn't use Prisma models directly
+// It uses raw SQL for maximum flexibility and demonstration purposes
+
+model ServiceLog {
+  id           Int      @id @default(autoincrement())
+  serviceName  String
+  logLevel     String
+  message      String
+  timestamp    DateTime @default(now())
+  instanceId   String
+  environment  String
+  processingTime Int?
+}
+
+model Metric {
+  id           Int      @id @default(autoincrement())
+  metricName   String
+  metricValue  Float
+  metricUnit   String
+  timestamp    DateTime @default(now())
+  service      String
+  instanceId   String
+  processingTime Int?
+}
+
+model Transaction {
+  id             Int      @id @default(autoincrement())
+  transactionId String   @unique
+  transactionType String
+  status         String
+  amount         Decimal?
+  processingTime Int?
+  timestamp      DateTime @default(now())
+  service        String
+  instanceId     String
+}
