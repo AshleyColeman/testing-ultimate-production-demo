@@ -140,12 +140,7 @@ Test Files  1 passed (1)
 
 - 🏗️ **[ARCHITECTURE_GUIDE.md](./docs/ARCHITECTURE_GUIDE.md)** - Detailed technical documentation
 - 🔴 **[ERROR_HANDLING.md](./docs/ERROR_HANDLING.md)** - Error handling and failure reporting
-- 📊 **[LOG_GUIDE.md](./docs/LOG_GUIDE.md)** - Understanding log files and metrics
-- ⏱️ **[REALISTIC_DELAYS.md](./docs/REALISTIC_DELAYS.md)** - Production delay simulation (50ms-10s)
-
-### Presentation
-
-- 🎤 **[DEMO_PRESENTATION.md](./docs/DEMO_PRESENTATION.md)** - Live demo guide and talking points
+- 📊 **[LOG_GUIDE.md](./docs/LOG_GUIDE.md)** - Understanding log files and metrics(50ms-10s)
 
 ### CI/CD Integration
 
