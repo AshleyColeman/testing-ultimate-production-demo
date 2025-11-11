@@ -20,11 +20,9 @@ import {
   getSchemasByService,
   cleanupInfrastructure,
 } from "./shared/testInfrastructure";
-import { createLogger } from "../utils/Logger";
 import { PrismaClient } from "@prisma/client";
 
 describe("🗄️ Database CRUD Operations - Real Data Verification", () => {
-  const logger = createLogger("DatabaseCRUD");
   let testPrisma: PrismaClient | null = null;
   let testSchema: any = null;
   let logFile: fs.WriteStream | null = null;
