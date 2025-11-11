@@ -37,36 +37,36 @@ All documentation is **generic** and reusable across any project with a Prisma-b
 
 ### Master Reference
 
-| File                           | Purpose                                      | For                           |
-| ------------------------------ | -------------------------------------------- | ----------------------------- |
-| **INTEGRATION_AGENT_MASTER.md** | Master guide with all skills, rules, and file references | Everyone |
-| **SKILL_TEMPLATE.md**          | Template for minimal skill format            | Creating new skills           |
-| **SKILL_REFACTORING_GUIDE.md** | Guide for refactoring large skill documents  | Maintaining documentation     |
-| **SCALING_TO_300_TABLES.md**   | Plan for scaling to large Prisma schemas     | Growth planning               |
+| File                            | Purpose                                                  | For                       |
+| ------------------------------- | -------------------------------------------------------- | ------------------------- |
+| **INTEGRATION_AGENT_MASTER.md** | Master guide with all skills, rules, and file references | Everyone                  |
+| **SKILL_TEMPLATE.md**           | Template for minimal skill format                        | Creating new skills       |
+| **SKILL_REFACTORING_GUIDE.md**  | Guide for refactoring large skill documents              | Maintaining documentation |
+| **SCALING_TO_300_TABLES.md**    | Plan for scaling to large Prisma schemas                 | Growth planning           |
 
 ### Core Documentation
 
-| File                        | Purpose                                    | Read Time |
-| --------------------------- | ------------------------------------------ | --------- |
-| `INTEGRATION_AGENT_MASTER.md` | **Master guide** — all skills, rules, workflow, file references | 20 min |
-| `README.md` (this file) | Quick start and navigation | 5 min |
+| File                          | Purpose                                                         | Read Time |
+| ----------------------------- | --------------------------------------------------------------- | --------- |
+| `INTEGRATION_AGENT_MASTER.md` | **Master guide** — all skills, rules, workflow, file references | 20 min    |
+| `README.md` (this file)       | Quick start and navigation                                      | 5 min     |
 
 ### Skills (10 Core Patterns) — All Generic & Reusable
 
 Each skill is focused (~100-150 lines), documented, and exemplified:
 
-| Skill                        | File                               | Purpose                                  |
-| ---------------------------- | ---------------------------------- | ---------------------------------------- |
+| Skill                        | File                        | Purpose                                  |
+| ---------------------------- | --------------------------- | ---------------------------------------- |
 | **access-infrastructure**    | infrastructure-singleton.md | Get shared infra singleton               |
-| **place-test-file**          | orchestrator-pattern.md            | Determine file location & naming         |
-| **select-schema**            | schema-selection.md            | Pick random database schema              |
-| **perform-crud-operations**  | prisma-crud-patterns.md            | Create, read, update, delete data        |
-| **generate-test-data**       | test-data-factories.md             | Generate realistic test data             |
-| **include-realistic-delays** | production-delays.md               | Add realistic timing (50-10000ms)        |
-| **test-error-scenarios**     | error-handling-testing.md          | Test validation, constraints, edge cases |
-| **test-multi-service-flows** | multi-service-testing.md           | Test cross-service operations (optional) |
-| **record-test-metrics**      | test-execution-recording.md        | Log execution metrics & performance      |
-| **verify-test-quality**      | checklist-integration.md           | Validate test before committing          |
+| **place-test-file**          | orchestrator-pattern.md     | Determine file location & naming         |
+| **select-schema**            | schema-selection.md         | Pick random database schema              |
+| **perform-crud-operations**  | prisma-crud-patterns.md     | Create, read, update, delete data        |
+| **generate-test-data**       | test-data-factories.md      | Generate realistic test data             |
+| **include-realistic-delays** | production-delays.md        | Add realistic timing (50-10000ms)        |
+| **test-error-scenarios**     | error-handling-testing.md   | Test validation, constraints, edge cases |
+| **test-multi-service-flows** | multi-service-testing.md    | Test cross-service operations (optional) |
+| **record-test-metrics**      | test-execution-recording.md | Log execution metrics & performance      |
+| **verify-test-quality**      | checklist-integration.md    | Validate test before committing          |
 
 → **All skills are generic** and work for any database, any service, any Prisma schema
 
