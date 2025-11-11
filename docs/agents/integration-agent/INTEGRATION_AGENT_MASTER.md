@@ -922,6 +922,10 @@ Step 11: verify-test-quality
 4. ❌ Forgetting to create tables for raw SQL services
 5. ❌ Hardcoding test data (causes duplicates)
 6. ❌ Calling raw SQL in tests instead of service methods
+7. ❌ **NEW**: Importing unused helpers/types (e.g., `generateTestData`, `User` type)
+8. ❌ **NEW**: Declaring but never using variables (e.g., `infra`)
+9. ❌ **NEW**: Manual data generation instead of using available helpers
+10. ❌ **NEW**: Not following DRY principles for timing/error handling
 
 ---
 
@@ -1172,25 +1176,109 @@ const correctedTests = await selfHealTests(generatedTests, {
 
 ---
 
+### 🆕 Skill 15: OPTIMIZE IMPORTS & CODE QUALITY (NEW)
+
+**Triggers**: "optimize imports", "code quality", "unused imports", "clean code"
+
+**What**: Ensure only necessary imports are included and code follows clean practices.
+
+**When**: **MANDATORY - During test generation and final validation**
+
+**File**: `docs/agents/integration-agent/skills/code-quality-optimization.md`
+
+**How**:
+
+```typescript
+// Validate imports are actually used
+const usedImports = analyzeImports(testCode);
+// Remove: generateTestData if not used
+// Remove: User type if only using CreateUserInput/UpdateUserInput
+// Remove: infra if never referenced after initialization
+
+// Use available helpers properly
+const userData = generateTestData("user"); // If available
+// OR manual generation with helper functions
+const uniqueEmail = generateUniqueEmail(); // Custom helper
+
+// Optimize repetitive code
+const testWrapper = createTestWrapper("user-service");
+// Reuse timing/error handling patterns
+```
+
+**Import Optimization Rules**:
+
+```typescript
+// ✅ CORRECT - Only import what you use
+import { userService } from "../../services/UserService";
+import type { CreateUserInput, UpdateUserInput } from "../../services/UserService";
+// Note: Don't import User type if you only use CreateUserInput/UpdateUserInput
+
+// ✅ CORRECT - Use helpers or custom functions
+import {
+  simulateProductionOperation,
+  // generateTestData, // Only import if ACTUALLY used
+} from "../shared/testHelpers";
+
+// ✅ CORRECT - Remove unused infrastructure variable
+// const infra = await getInfrastructure(); // If never used
+// INSTEAD: Call directly in beforeAll if needed only there
+await getInfrastructure(); // Direct call if only used in beforeAll
+```
+
+**Code Quality Rules**:
+
+```typescript
+// ✅ CORRECT - Use available helpers
+const userData = generateTestData("user");
+// OR create dedicated helper functions
+const uniqueEmail = () => `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@example.com`;
+
+// ✅ CORRECT - DRY principles for common patterns
+const executeWithTiming = async (testName: string, testFn: () => Promise<any>) => {
+  const startTime = Date.now();
+  try {
+    const result = await testFn();
+    const executionTime = Date.now() - startTime;
+    await recordTestExecution("user-service", testName, "success", executionTime);
+    return result;
+  } catch (error) {
+    const executionTime = Date.now() - startTime;
+    await recordTestExecution("user-service", testName, "failure", executionTime);
+    throw error;
+  }
+};
+```
+
+**Common Issues to Fix**:
+
+1. **Unused Type Imports**: Remove `User` if only using interfaces
+2. **Unused Helper Imports**: Remove `generateTestData` if using manual generation
+3. **Unused Variables**: Remove `infra` if never referenced after initialization
+4. **Repetitive Patterns**: Extract common timing/error handling into reusable patterns
+5. **Manual vs Helper Usage**: Prefer available helpers over manual implementations
+
+---
+
 ## 🔍 QUICK REFERENCE: TRIGGER WORDS TO SKILLS
 
-| Trigger Words                                                       | Skill                                       |
-| ------------------------------------------------------------------- | ------------------------------------------- |
-| **⭐ ALWAYS START: analyze, detect, read service, understand code** | **Skill 0**: Analyze Service ⭐ MANDATORY   |
-| access, infrastructure, containers, logger, initialize              | **Skill 1**: Access Infrastructure          |
-| place, file, location, naming, where                                | **Skill 2**: Place Test File                |
-| select, schema, database, pick, random                              | **Skill 3**: Select Schema                  |
-| create tables, setup schema, prepare database, dynamic schema       | **Skill 4**: Create Dynamic Schema          |
-| database operations, CRUD, query, insert, select, update, delete    | **Skill 5**: Perform Database Operations    |
-| generate unique data, avoid conflicts, smart data factory           | **Skill 6**: Generate Intelligent Test Data |
-| delay, timing, production, race, timeout                            | **Skill 7**: Include Delays                 |
-| database errors, constraint violations, specific error codes        | **Skill 8**: Database-Aware Error Handling  |
-| error, validation, constraint, not found, edge cases                | **Skill 9**: Test Error Scenarios           |
-| use template, pattern-based, service-specific, follow pattern       | **Skill 10**: Pattern-Based Generation      |
-| fix failing tests, auto-correct, self-healing, resolve issues       | **Skill 11**: Self-Healing Tests            |
-| multi-service, cross-service, cross-domain, interaction             | **Skill 12**: Test Multi-Service            |
-| record, metrics, log, observability, tracking                       | **Skill 13**: Record Metrics                |
-| verify, validate, checklist, quality, before                        | **Skill 14**: Verify Quality                |
+| Trigger Words                                                       | Skill                                         |
+| ------------------------------------------------------------------- | --------------------------------------------- |
+| **⭐ ALWAYS START: analyze, detect, read service, understand code** | **Skill 0**: Analyze Service ⭐ MANDATORY       |
+| access, infrastructure, containers, logger, initialize              | **Skill 1**: Access Infrastructure            |
+| place, file, location, naming, where                                | **Skill 2**: Place Test File                  |
+| select, schema, database, pick, random                              | **Skill 3**: Select Schema                    |
+| create tables, setup schema, prepare database, dynamic schema       | **Skill 4**: Create Dynamic Schema            |
+| database operations, CRUD, query, insert, select, update, delete    | **Skill 5**: Perform Database Operations      |
+| generate unique data, avoid conflicts, smart data factory           | **Skill 6**: Generate Intelligent Test Data   |
+| delay, timing, production, race, timeout                            | **Skill 7**: Include Delays                   |
+| database errors, constraint violations, specific error codes        | **Skill 8**: Database-Aware Error Handling    |
+| error, validation, constraint, not found, edge cases                | **Skill 9**: Test Error Scenarios             |
+| use template, pattern-based, service-specific, follow pattern       | **Skill 10**: Pattern-Based Generation        |
+| fix failing tests, auto-correct, self-healing, resolve issues       | **Skill 11**: Self-Healing Tests              |
+| multi-service, cross-service, cross-domain, interaction             | **Skill 12**: Test Multi-Service              |
+| record, metrics, log, observability, tracking                       | **Skill 13**: Record Metrics                  |
+| verify, validate, checklist, quality, before                        | **Skill 14**: Verify Quality                  |
+| optimize imports, code quality, unused imports, clean code          | **Skill 15**: Optimize Imports & Code Quality |
 
 ---
 
@@ -1261,12 +1349,16 @@ Before you return any test to the user, verify this checklist:
 - [x] Uses try/catch: Proper error handling
 - [x] Tests error codes: P2002, P2003, P2025, etc.
 
-**Quality**
+**Code Quality**
 
 - [x] All tests pass: 10/10 pass
 - [x] No external calls: Only database operations
 - [x] No service changes: Test code only
 - [x] No warnings: Clean console output
+- [x] No unused imports: All imported types/functions are used
+- [x] No unused variables: All declared variables are referenced
+- [x] Clean imports: Only import what's actually needed
+- [x] Helper usage: Use available helpers instead of manual implementations
 
 **If all checks pass → TEST IS PRODUCTION-READY ✅**
 
@@ -1586,6 +1678,121 @@ try {
 | Schema not found      | Include `"${schema.schemaName}".tablename` in SQL   |
 | Wrong column type     | Analyze service INSERT to find exact types          |
 | Wrong error code      | Test error message content, not just code           |
+| Unused imports        | Remove `generateTestData`, `User` if not used       |
+| Unused variables      | Remove `infra` if never referenced after init       |
+
+---
+
+### 🆕 Code Quality Issues & Solutions
+
+**Issue 1: Unused Type Imports**
+
+**Symptom**: TypeScript/ESLint warnings about unused imports
+
+**Examples**:
+```typescript
+// ❌ WRONG - User type imported but never used
+import type { User, CreateUserInput, UpdateUserInput } from "../../services/UserService";
+
+// ✅ CORRECT - Only import what's used
+import type { CreateUserInput, UpdateUserInput } from "../../services/UserService";
+```
+
+**Solution**: Analyze which types are actually used and only import those.
+
+---
+
+**Issue 2: Unused Helper Imports**
+
+**Symptom**: Importing helpers but using manual implementation
+
+**Examples**:
+```typescript
+// ❌ WRONG - Import generateTestData but don't use it
+import { generateTestData } from "../shared/testHelpers";
+const email = `test_${Date.now()}@example.com`; // Manual generation
+
+// ✅ CORRECT - Either use the helper or don't import it
+// Option A: Use the helper
+import { generateTestData } from "../shared/testHelpers";
+const userData = generateTestData("user");
+
+// Option B: Don't import and use manual generation
+const email = `test_${Date.now()}@example.com`;
+```
+
+**Solution**: Either use imported helpers or remove unused imports.
+
+---
+
+**Issue 3: Unused Infrastructure Variable**
+
+**Symptom**: Declaring `infra` but never using it
+
+**Examples**:
+```typescript
+// ❌ WRONG - infra declared but never used
+let infra: any;
+beforeAll(async () => {
+  infra = await getInfrastructure(); // Never referenced
+});
+
+// ✅ CORRECT - Call directly if only needed in beforeAll
+beforeAll(async () => {
+  await getInfrastructure(); // Direct call
+});
+
+// OR use if accessing other properties
+beforeAll(async () => {
+  const infra = await getInfrastructure();
+  infra.logger.log("Test setup complete");
+});
+```
+
+**Solution**: Remove unused variables or use them appropriately.
+
+---
+
+**Issue 4: Repetitive Code Patterns**
+
+**Symptom**: Same timing/error handling code repeated across tests
+
+**Examples**:
+```typescript
+// ❌ WRONG - Repetitive pattern in every test
+const startTime = Date.now();
+try {
+  // test logic
+  const executionTime = Date.now() - startTime;
+  await recordTestExecution("user-service", testName, "success", executionTime);
+} catch (error) {
+  const executionTime = Date.now() - startTime;
+  await recordTestExecution("user-service", testName, "failure", executionTime);
+  throw error;
+}
+
+// ✅ CORRECT - Extract into helper function
+const executeTest = async (testName: string, testFn: () => Promise<any>) => {
+  const startTime = Date.now();
+  try {
+    const result = await testFn();
+    const executionTime = Date.now() - startTime;
+    await recordTestExecution("user-service", testName, "success", executionTime);
+    return result;
+  } catch (error) {
+    const executionTime = Date.now() - startTime;
+    await recordTestExecution("user-service", testName, "failure", executionTime);
+    throw error;
+  }
+};
+
+// Use in tests
+await executeTest("Create user successfully", async () => {
+  return await userService.createUser(userData);
+});
+```
+
+**Solution**: Extract common patterns into reusable helper functions.
 
 ---
 
