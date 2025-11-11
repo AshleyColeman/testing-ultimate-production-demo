@@ -915,6 +915,7 @@ Step 11: verify-test-quality
 ```
 
 **⚠️ COMMON PITFALLS TO AVOID:**
+
 1. ❌ Skipping Step 0 (service analysis)
 2. ❌ Using @/ import aliases instead of relative paths
 3. ❌ Wrong recordTestExecution parameter order
