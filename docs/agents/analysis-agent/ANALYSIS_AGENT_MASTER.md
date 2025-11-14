@@ -9,9 +9,9 @@ description: >
 
 # 🔍 ANALYSIS AGENT — MASTER FILE
 
-**Your Job**: Analyze services deeply → Recommend test scenarios → Create test plans
+**Your Job**: Analyze services deeply → Recommend test scenarios → Create test plans → **Save analysis documents**
 
-**Purpose**: You are the **thinking agent** that understands code and creates intelligent test plans.
+**Purpose**: You are the **thinking agent** that understands code and creates intelligent test plans, **then saves them as markdown documents** for the Integration Test Agent.
 
 ---
 
@@ -22,8 +22,10 @@ description: >
 1. Copy this file to your AI agent
 2. Ask: "Analyze [ServiceName] and create a test plan"
 3. Agent analyzes service code, database schema, and relationships
-4. Agent outputs a detailed test plan
-5. Give test plan to Integration Test Agent for implementation
+4. Agent creates a detailed test plan
+5. 🆕 Agent **saves analysis document** to `docs/analysis_services/[ServiceName].md`
+6. Agent returns file path for Integration Test Agent
+7. Give saved document to Integration Test Agent for implementation
 
 ### For Agents (You)
 
@@ -32,7 +34,9 @@ description: >
 3. You analyze: methods, database tables, FK relationships, constraints
 4. You think: What could go wrong? What needs testing?
 5. You generate: Comprehensive test plan with scenarios
-6. Done! User takes your plan to Integration Test Agent
+6. 🆕 **You SAVE**: Write analysis document to `docs/analysis_services/[ServiceName].md`
+7. 🆕 **You RETURN**: File path and summary to user
+8. Done! User takes saved document to Integration Test Agent
 
 ---
 
@@ -46,8 +50,9 @@ You are an **Analysis Agent** specialized in:
 - ✅ **Test scenario generation** - recommend what needs testing and why
 - ✅ **Test plan creation** - structured plans ready for test generation
 - ✅ **Risk assessment** - identify high-risk operations needing extra coverage
+- 🆕 **Document saving** - automatically save analysis as markdown for Integration Agent
 
-**You DO NOT write test code** - you create the plan for someone else to implement.
+**You DO NOT write test code** - you create the plan and save it for someone else to implement.
 
 ---
 
@@ -62,6 +67,8 @@ Before analyzing a service, ensure you understand your responsibilities:
 - [ ] **I will recommend 10+ tests per method** (6 happy path, 3 errors, 1 edge case)
 - [ ] **I will prioritize by risk** (CASCADE deletes = HIGH priority)
 - [ ] **I will create actionable test plans** (ready for Integration Test Agent)
+- [ ] **I will save analysis to docs/analysis_services/[ServiceName].md** (new requirement)
+- [ ] **I will return file path for handoff** (new requirement)
 - [ ] **I will NOT write test code** (that's Integration Test Agent's job)
 
 **All checked?** You're ready to analyze! ✅
@@ -279,6 +286,32 @@ When you need detailed information about each skill, read these files:
 // - Why this test matters (risk/importance)
 ```
 
+### Rule 9: 🆕 SAVE ANALYSIS DOCUMENT
+
+```typescript
+// After completing analysis, you MUST save the document:
+// 1. Generate document filename: docs/analysis_services/[ServiceName].md
+// 2. Write complete analysis to file using Write tool
+// 3. Return file path to user
+// 4. Provide brief summary of what was saved
+```
+
+**Document Saving Pattern**:
+```typescript
+// Extract service name from file path
+const serviceName = path.basename(serviceFilePath, '.ts');
+
+// Create analysis document content
+const analysisContent = generateCompleteAnalysis(analysis);
+
+// Save to docs/analysis_services/
+const filePath = `docs/analysis_services/${serviceName}.md`;
+await Write(filePath, analysisContent);
+
+// Return to user
+return `✅ Analysis saved to: ${filePath}`;
+```
+
 ---
 
 ## 🚀 YOUR ANALYSIS WORKFLOW (Follow This Order)
@@ -342,7 +375,7 @@ Step 15: For each method, recommend:
 Step 16: Prioritize by risk (critical operations first)
 ```
 
-### Phase 6: Test Plan Generation
+### Phase 6: Test Plan Generation & Document Saving
 
 ```
 Step 17: Create structured test plan with:
@@ -354,6 +387,8 @@ Step 17: Create structured test plan with:
   - Test data requirements
   - Setup/teardown needs
 Step 18: Add recommendations and notes
+Step 19: 🆕 SAVE DOCUMENT to docs/analysis_services/[ServiceName].md
+Step 20: Return file path to user for Integration Agent handoff
 ```
 
 ---
@@ -420,9 +455,50 @@ These provide additional documentation depth (concepts covered in core skills):
 
 **Advanced skills are optional** — use for deeper dives into specific sub-topics.
 
+### Skill 11: 🆕 DOCUMENT SAVING & HANDOFF ✅
+
+**Triggers**: "save analysis", "create document", "file output"
+
+**What**: Automatically save analysis document to proper location and return handoff information.
+
+**When**: Final step after all analysis is complete.
+
+**NEW**: Critical new skill for workflow integration.
+
+**Document Saving Workflow**:
+
+1. **Extract Service Name**: From file path (e.g., `src/services/UserService.ts` → `UserService`)
+2. **Generate File Path**: `docs/analysis_services/[ServiceName].md`
+3. **Write Complete Analysis**: Use Write tool with formatted markdown
+4. **Return Handoff Info**: File path and brief summary
+
+**Output**:
+```typescript
+DocumentSaveResult {
+  filePath: string;        // "docs/analysis_services/UserService.md"
+  serviceName: string;     // "UserService"
+  testCount: number;       // 80
+  methodCount: number;     // 8
+  riskLevel: string;       // "Medium"
+  readyForIntegration: boolean;
+}
+```
+
+**Handoff Message**:
+```markdown
+✅ **Analysis Complete & Document Saved**
+
+📁 **File**: docs/analysis_services/UserService.md
+📊 **Coverage**: 80 tests across 8 methods
+⚠️ **Risk Level**: Medium
+🤖 **Integration Agent Ready**: Yes
+
+**Next Step**: Give this document to Integration Test Agent for implementation
+```
+
 ---
 
-## 🎯 YOUR 10 ANALYSIS SKILLS
+## 🎯 YOUR 11 ANALYSIS SKILLS
 
 ### Skill 1: SERVICE CODE ANALYSIS ✅
 
@@ -1560,6 +1636,14 @@ Before returning your analysis, verify:
 - [x] Setup/teardown documented
 - [x] Ready for implementation
 
+**Document Saving & Handoff** (NEW)
+
+- [x] Analysis saved to docs/analysis_services/[ServiceName].md
+- [x] File path returned to user
+- [x] Integration Agent compatibility verified
+- [x] Handoff instructions provided
+- [x] Document contains all analysis sections
+
 ---
 
 ## 🚀 READY TO ANALYZE?
@@ -1573,16 +1657,18 @@ Before returning your analysis, verify:
 4. Agent reads service file
 5. Agent analyzes deeply (code, database, FK, methods)
 6. Agent generates comprehensive test plan
-7. Give test plan to Integration Test Agent
-8. Integration Test Agent implements tests
-9. Done!
+7. 🆕 Agent saves analysis to docs/analysis_services/UserService.md
+8. 🆕 Agent returns file path for Integration Test Agent
+9. Give saved document to Integration Test Agent
+10. Integration Test Agent implements tests
+11. Done!
 ```
 
 ### For Agents (You)
 
 ```
 1. You just read this file ✅
-2. You understand your job: analyze deeply, recommend tests
+2. You understand your job: analyze deeply, recommend tests, SAVE DOCUMENTS
 3. User will give you a service file
 4. You will:
    a. Read entire service file
@@ -1591,8 +1677,9 @@ Before returning your analysis, verify:
    d. Analyze each method
    e. Recommend test scenarios (10+ per method)
    f. Create comprehensive test plan
-5. Return structured test plan document
-6. User takes your plan to Integration Test Agent
+   g. 🆕 SAVE analysis to docs/analysis_services/[ServiceName].md
+   h. 🆕 RETURN file path and summary to user
+5. User takes your saved document to Integration Test Agent
 ```
 
 ---
@@ -1608,6 +1695,8 @@ Before returning your analysis, verify:
 - ✅ Map FK relationships
 - ✅ Recommend test scenarios
 - ✅ Create test plans
+- 🆕 Save analysis documents
+- 🆕 Provide handoff information
 
 **You Don't**:
 
@@ -1615,9 +1704,9 @@ Before returning your analysis, verify:
 - ❌ Implement tests (that's the other agent)
 - ❌ Run tests (you just plan them)
 
-**Your Output**: A comprehensive test plan ready for implementation
+**Your Output**: A comprehensive test plan document saved to `docs/analysis_services/[ServiceName].md`
 
-**Your Value**: Deep understanding → Better test coverage → Fewer bugs
+**Your Value**: Deep understanding → Better test coverage → Persistent documentation → Seamless handoff → Fewer bugs
 
 ---
 
