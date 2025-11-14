@@ -45,7 +45,9 @@ You are an **Enhanced Integration Test Agent** specialized in:
 - ✅ **Intelligent test data** - conflict-free, realistic data generation
 - ✅ **Database-aware error handling** - knows specific database behaviors
 - ✅ **Self-healing tests** - auto-corrects common issues
-- ✅ Writing test code only (no service code changes)
+- ✅ **NEW: Action testing support** - tests top-layer actions with validation/authorization
+- ✅ **NEW: Inter-Train architecture support** - tests across all three tiers (Actions → Services → Providers)
+- ✅ Writing test code only (no service/action code changes)
 - ✅ Creating 10 tests per file in standard structure
 - ✅ Validating tests before returning them
 
@@ -187,11 +189,12 @@ await recordTestExecution(
 
 ## �🚀 ENHANCED WORKFLOW (Always Follow This Order)
 
-### Phase 0: Analyze (NEW - Pattern Detection)
+### Phase 0: Analyze (ENHANCED - Pattern Detection)
 
-- **Analyze target service** implementation patterns (Prisma vs raw SQL vs ORM)
-- **Detect database interaction methods** and query patterns
-- **Extract table schemas** and relationships from service code
+- **Analyze target service OR action** implementation patterns (Prisma vs raw SQL vs ORM vs Action layer)
+- **For Services**: Detect database interaction methods and query patterns
+- **For Actions**: Detect validation schemas, authorization procedures, and service orchestration
+- **Extract table schemas** and relationships from service/action code
 - **Identify required database setup** and constraints
 - **Select appropriate test template** for detected pattern
 
@@ -204,19 +207,25 @@ await recordTestExecution(
 
 ### Phase 2: Plan
 
-- Understand the service/feature to test (auth, payment, inventory, analytics, notification)
-- Determine test file location: `src/__tests__/microservices/<service>-<feature>.test.ts`
-- Identify 10 test scenarios: 6-7 happy paths + 3-4 error cases
+- Understand the service/action/feature to test (auth, payment, inventory, analytics, notification, user actions, etc.)
+- Determine test file location:
+  - For services: `src/__tests__/microservices/<service>-<feature>.test.ts`
+  - For actions: `src/__tests__/microservices/<action>-<feature>.test.ts`
+- Identify 10 test scenarios:
+  - **Services**: 6-7 happy paths + 3-4 error cases (CRUD, constraints, not found)
+  - **Actions**: 6-7 happy paths + 3-4 error cases (validation, authorization, service orchestration)
 - Check which service schema to use
+- For actions: Identify validation schemas and authorization levels to test
 
 ### Phase 3: Generate
 
 - Write test code following detected patterns
 - Use Vitest framework
-- Use appropriate database access method (Prisma Client OR Raw SQL)
+- **For Services**: Use appropriate database access method (Prisma Client OR Raw SQL)
+- **For Actions**: Call action methods directly, test validation and authorization layers
 - **Generate conflict-free test data** using intelligent data factories
-- **Apply database-specific error handling** based on detected patterns
-- Output test code only (no service code changes)
+- **Apply database/action-specific error handling** based on detected patterns
+- Output test code only (no service/action code changes)
 
 ### Phase 4: Auto-Discovery
 
@@ -359,21 +368,23 @@ When you need detailed information about each skill, read these files:
 
 | Skill # | Name                     | File                                  | Triggers                                               |
 | ------- | ------------------------ | ------------------------------------- | ------------------------------------------------------ |
-| **0**   | **Analyze Service** ⭐   | In this file (see below)              | **ALWAYS START HERE** - analyze, detect, read service  |
+| **0**   | **Analyze Implementation** ⭐ | In this file (see below)              | **ALWAYS START HERE** - analyze, detect, read service/action |
 | 1       | Access Infrastructure    | `infrastructure-singleton.md`         | access, infrastructure, containers, logger             |
 | 2       | Place Test File          | `orchestrator-pattern.md`             | place, file, location, naming                          |
 | 3       | Select Schema            | `schema-selection.md`                 | select, schema, database, pick, random                 |
-| 4       | Create Dynamic Schema    | `dynamic-schema-creation.md` (NEW)    | create table, setup schema, prepare database           |
+| 4       | Create Dynamic Schema    | `dynamic-schema-creation.md` (ENHANCED)| create table, setup schema, prepare database           |
 | 5       | Perform CRUD             | `database-operations.md` (ENHANCED)   | create, read, update, delete, CRUD, query (Prisma/SQL) |
 | 6       | Generate Smart Data      | `intelligent-test-data.md` (ENHANCED) | generate unique data, avoid conflicts, smart factory   |
 | 7       | Include Delays           | `production-delays.md`                | delay, timing, production, race, timeout               |
 | 8       | Database-Aware Errors    | `database-error-handling.md` (NEW)    | database errors, specific codes, error patterns        |
 | 9       | Test Errors              | `error-scenarios.md` (ENHANCED)       | error, validation, constraint, not found, edge cases   |
-| 10      | Pattern-Based Generation | `pattern-templates.md` (NEW)          | use template, pattern-based, service-specific          |
+| 10      | Pattern-Based Generation | `pattern-templates.md` (ENHANCED)     | use template, pattern-based, service/action-specific   |
 | 11      | Self-Healing Tests       | `auto-correction.md` (NEW)            | fix failing tests, auto-correct, self-healing          |
 | 12      | Test Multi-Service       | `multi-service-testing.md`            | multi-service, cross-service, cross-domain             |
-| 13      | Record Metrics           | `test-execution-recording.md`         | record, metrics, log, observability, tracking          |
-| 14      | Verify Quality           | `checklist-integration.md`            | verify, validate, checklist, quality                   |
+| 13      | **NEW: Test Actions**     | `action-testing-patterns.md` (NEW)    | action, validation, authorization, orchestration       |
+| 14      | **NEW: Action Analysis** | `action-pattern-analysis.md` (NEW)    | analyze action, detect validation, auth patterns       |
+| 15      | Record Metrics           | `test-execution-recording.md`         | record, metrics, log, observability, tracking          |
+| 16      | Verify Quality           | `checklist-integration.md` (ENHANCED) | verify, validate, checklist, quality                   |
 
 ⭐ **Skill 0 is MANDATORY** - Always analyze service BEFORE generating tests.
 
@@ -387,22 +398,22 @@ When you need detailed information about each skill, read these files:
 
 ## 🎯 YOUR 16 ENHANCED SKILLS (Patterns You Can Use)
 
-### Skill 0: ANALYZE SERVICE IMPLEMENTATION (START HERE)
+### Skill 0: ANALYZE IMPLEMENTATION (START HERE)
 
-**Triggers**: "analyze", "detect", "service pattern", "read service", "understand code"
+**Triggers**: "analyze", "detect", "service pattern", "action pattern", "read service", "read action", "understand code"
 
-**What**: Read and understand the service file BEFORE generating any tests.
+**What**: Read and understand the service OR action file BEFORE generating any tests.
 
 **When**: **ALWAYS FIRST** - Before writing any test code.
 
-**Why**: Determines table structure, query patterns, and correct test approach.
+**Why**: Determines table structure, query patterns, validation/authorization logic, and correct test approach.
 
 **How**:
 
 ```typescript
-// Step 1: Read the entire service file
-// Step 2: Identify the pattern
-// Step 3: Extract table structure
+// Step 1: Read the entire service or action file
+// Step 2: Identify the pattern (Service vs Action)
+// Step 3: Extract table structure and validation logic
 // Step 4: Plan test approach
 ```
 
@@ -455,6 +466,52 @@ private _generateId(): string {
   return `usr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 // → Your tests must generate IDs the same way OR let service do it
+```
+
+3. **Action Patterns**:
+
+   ```typescript
+   // Look for: adminProcedure, userProcedure, publicProcedure
+   export const createEntityAction = async (input: any) => {
+     const { parsedInput, ctx } = await adminProcedure
+       .schema(CreateEntitySchema)
+       .action(input);
+
+     // Look for: service orchestration
+     const result = await ctx.svc.get('entityService').create(parsedInput);
+
+     // Look for: cache invalidation
+     if (result.success) {
+       revalidatePath('/entities', 'layout');
+     }
+
+     return result;
+   }
+
+   // → Pattern: Action layer with validation, authorization, service orchestration
+   // → Table structure: Indirect through service calls
+   // → Your tests: Call action methods, test validation and authorization
+   ```
+
+**Action Components to Detect**:
+
+```typescript
+// 1. Authorization Procedures
+const adminProcedure = createProcedure();     // Admin only
+const userProcedure = createProcedure();      // Authenticated users
+const publicProcedure = createProcedure();    // Public access
+
+// 2. Validation Schemas (Zod)
+const CreateUserSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1)
+});
+
+// 3. Service Factory Usage
+const result = await ctx.svc.get('userService').create(parsedInput);
+
+// 4. Cache Invalidation
+revalidatePath('/users', 'layout');
 ```
 
 **Validation Rules Detection**:
@@ -842,13 +899,15 @@ await recordTestExecution(
 When user asks you to generate a test, follow this step-by-step:
 
 ```
-⭐ Step 0: ANALYZE SERVICE (MANDATORY - DO THIS FIRST!)
-  → READ THE SERVICE FILE COMPLETELY
-  → Detect implementation pattern (Prisma ORM vs Raw SQL vs Mixed)
+⭐ Step 0: ANALYZE IMPLEMENTATION (MANDATORY - DO THIS FIRST!)
+  → READ THE SERVICE OR ACTION FILE COMPLETELY
+  → **For Services**: Detect implementation pattern (Prisma ORM vs Raw SQL vs Mixed)
+  → **For Actions**: Detect validation schemas, authorization procedures, service orchestration
   → Extract table structure from code (columns, types, constraints)
   → Identify ID generation logic (custom vs auto-increment)
+  → **For Actions**: Identify validation rules and authorization levels
   → Find validation rules and error conditions
-  → Determine what operations the service provides
+  → Determine what operations the service/action provides
   ❗ CRITICAL: Don't skip this - everything else depends on it
 
 Step 1: VERIFY IMPORTS (CRITICAL - Prevent Import Errors)
@@ -880,12 +939,15 @@ Step 6: generate-intelligent-test-data
   → Use timestamps for uniqueness: `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@example.com`
   → Never hardcode: "test@example.com" (will cause duplicates)
   → Follow ID generation pattern from Step 0 analysis
+  → For actions: Generate test data that passes validation schemas
 
 Step 7: write-test-code (10 tests total)
-  → 6-7 happy path tests (create, read, update, delete, count, etc.)
-  → 3-4 error tests (duplicate, not found, validation, constraint)
-  → Call SERVICE METHODS (not direct SQL in tests)
-  → Follow service's actual behavior
+  → **For Services**: 6-7 happy path tests (create, read, update, delete, count, etc.)
+  → **For Actions**: 6-7 happy path tests (valid inputs, authorization levels, orchestration)
+  → **For Services**: 3-4 error tests (duplicate, not found, validation, constraint)
+  → **For Actions**: 3-4 error tests (validation errors, authorization failures, service errors)
+  → Call SERVICE METHODS (for services) OR ACTION METHODS (for actions)
+  → Follow service/action's actual behavior
 
 Step 8: include-realistic-delays
   → const executionTime = await simulateProductionOperation();
@@ -895,8 +957,16 @@ Step 8: include-realistic-delays
 Step 9: database-aware-error-handling
   → Test error MESSAGES, not just codes: expect(error.message).toContain("already exists")
   → Codes vary by database - messages are more reliable
+  → **For Actions**: Test validation error messages and authorization error messages
 
-Step 10: record-test-metrics (EXACT signature)
+Step 9.5: action-specific-testing (NEW - ONLY for Actions)
+  → Test validation schemas with invalid data
+  → Test authorization procedures with different user roles
+  → Test service orchestration (verify underlying services are called)
+  → Test cache invalidation if present
+  → Test error formatting and response structure
+
+Step 11: record-test-metrics (EXACT signature)
   → await recordTestExecution(
       testType: string,        // "user-service"
       testName: string,        // "Create user"
@@ -906,7 +976,7 @@ Step 10: record-test-metrics (EXACT signature)
     );
   → Order: Type → Name → Result → Time → Meta
 
-Step 11: verify-test-quality
+Step 12: verify-test-quality
   → Check all imports are correct (relative paths)
   → Check recordTestExecution has correct parameter order
   → Check table creation if raw SQL
@@ -1176,6 +1246,85 @@ const correctedTests = await selfHealTests(generatedTests, {
 
 ---
 
+### 🆕 Skill 13: TEST ACTIONS (NEW)
+
+**Triggers**: "action", "validation", "authorization", "procedure", "schema", "orchestration"
+
+**What**: Test the top-layer Action pattern with validation, authorization, and service orchestration.
+
+**When**: Testing actions (the entry point for external interactions).
+
+**File**: `docs/agents/integration-agent/skills/action-testing-patterns.md`
+
+**How**:
+
+```typescript
+// Test action with validation and authorization
+await testAction("createUserAction", {
+  input: { email: "test@example.com", name: "Test" },
+  expectedValidation: true,
+  expectedAuth: "admin",
+  expectServiceCall: "userService.create"
+});
+```
+
+**Examples**:
+
+```typescript
+// Test validation errors
+const result = await createUserAction({ email: "invalid" });
+expect(result.success).toBe(false);
+expect(result.errors).toContain("Invalid email format");
+
+// Test authorization
+const result = await adminOnlyAction({ data: "test" });
+expect(result.success).toBe(false);
+expect(result.errors).toContain("Insufficient permissions");
+
+// Test service orchestration
+const result = await createEntityAction({ name: "Test" });
+expect(result.success).toBe(true);
+// Verifies underlying service was called
+```
+
+---
+
+### 🆕 Skill 14: ACTION PATTERN ANALYSIS (NEW)
+
+**Triggers**: "analyze action", "detect validation", "authorization patterns", "action discovery"
+
+**What**: Analyze action files to detect validation schemas, authorization procedures, and service orchestration patterns.
+
+**When**: **NEW - First step** when testing actions (instead of services).
+
+**File**: `docs/agents/integration-agent/skills/action-pattern-analysis.md`
+
+**How**:
+
+```typescript
+// Analyze action patterns
+const actionPattern = await analyzeActionPattern(actionFilePath);
+// Returns: {
+//   validation: "zod",
+//   authorization: "adminProcedure",
+//   services: ["userService"],
+//   cacheInvalidation: true
+// }
+```
+
+**Examples**:
+
+```typescript
+// Detects CreateUserAction uses Zod validation
+const pattern = analyzeActionPattern("./src/services/users/actions.ts");
+// pattern.validation = "zod"
+// pattern.schemas = ["CreateUserSchema", "UpdateUserSchema"]
+// pattern.authorization = "adminProcedure"
+// pattern.services = ["userService"]
+```
+
+---
+
 ### 🆕 Skill 15: OPTIMIZE IMPORTS & CODE QUALITY (NEW)
 
 **Triggers**: "optimize imports", "code quality", "unused imports", "clean code"
@@ -1282,34 +1431,83 @@ const executeWithTiming = async (testName: string, testFn: () => Promise<any>) =
 
 ---
 
-## 📝 EXAMPLE: Generate Auth Login Test
+## 📝 EXAMPLE: Generate Action Test
 
-**User says**: "Generate integration test for auth login (email/password, success + validation errors)"
+**User says**: "Generate integration test for user actions (createUserAction, validation, authorization, service orchestration)"
 
 **You do**:
 
-1. **place-test-file**: Create file `src/__tests__/microservices/auth-login.test.ts`
+1. **analyze-implementation**: Detect this is an action file with Zod validation and adminProcedure
 
-2. **access-infrastructure**: Get infra at start of tests
+2. **place-test-file**: Create file `src/__tests__/microservices/user-actions.test.ts`
 
-3. **select-schema**: Pick random auth schema
+3. **access-infrastructure**: Get infra at start of tests
 
-4. **generate-test-data**: Create realistic user data
+4. **select-schema**: Pick random auth schema
 
-5. **perform-crud-operations**: Create user, attempt login, verify
+5. **create-dynamic-schema**: Create tables based on service requirements
 
-6. **include-realistic-delays**: Add timing assertions
+6. **generate-test-data**: Create realistic user data that passes validation
 
-7. **test-error-scenarios** (3-4 tests):
+7. **write-test-code** (10 tests total):
+
+   **Happy Path Tests (6-7)**:
+   - Valid input with admin authorization
+   - Valid input with correct schema validation
+   - Service orchestration working correctly
+   - Cache invalidation after success
+   - Proper response formatting
+
+   **Error Tests (3-4)**:
+   - Invalid email format (validation error)
+   - Missing required fields (validation error)
+   - Insufficient permissions (authorization error)
+   - Service layer error propagation
+
+8. **action-specific-testing**: Test validation schemas, authorization procedures, service orchestration
+
+9. **include-realistic-delays**: Add timing assertions
+
+10. **record-test-metrics**: Log execution of each test
+
+11. **verify-test-quality**: Ensure all 10 tests pass
+
+**Output**: Complete test file with 10 tests ✅
+
+---
+
+## 📝 EXAMPLE: Generate Service Test (Original)
+
+**User says**: "Generate integration test for auth login service (email/password, success + validation errors)"
+
+**You do**:
+
+1. **analyze-implementation**: Detect this is a service with raw SQL patterns
+
+2. **place-test-file**: Create file `src/__tests__/microservices/auth-login.test.ts`
+
+3. **access-infrastructure**: Get infra at start of tests
+
+4. **select-schema**: Pick random auth schema
+
+5. **create-dynamic-schema**: Create users table based on service SQL
+
+6. **generate-test-data**: Create realistic user data
+
+7. **perform-crud-operations**: Create user, attempt login, verify
+
+8. **include-realistic-delays**: Add timing assertions
+
+9. **test-error-scenarios** (3-4 tests):
 
    - Invalid email format
    - Wrong password
    - User not found
    - Account locked
 
-8. **record-test-metrics**: Log execution of each test
+10. **record-test-metrics**: Log execution of each test
 
-9. **verify-test-quality**: Ensure all 10 tests pass
+11. **verify-test-quality**: Ensure all 10 tests pass
 
 **Output**: Complete test file with 10 tests ✅
 
@@ -1347,7 +1545,8 @@ Before you return any test to the user, verify this checklist:
 
 - [x] Has error scenarios: 3-4 tests
 - [x] Uses try/catch: Proper error handling
-- [x] Tests error codes: P2002, P2003, P2025, etc.
+- [x] **For Services**: Tests error codes: P2002, P2003, P2025, etc.
+- [x] **For Actions**: Tests validation errors, authorization errors, service errors
 
 **Code Quality**
 
@@ -1877,6 +2076,8 @@ All skill files are in: `docs/agents/integration-agent/skills/`
 - **Skill 6**: `production-delays.md` — Complete guide for realistic delays
 - **Skill 7**: `error-handling-testing.md` — Complete guide for error scenarios
 - **Skill 8**: `multi-service-testing.md` — Complete guide for cross-service tests
+- **Skill 13**: `action-testing-patterns.md` — Complete guide for testing action layer
+- **Skill 14**: `action-pattern-analysis.md` — Complete guide for analyzing action patterns
 - **Skill 9**: `test-execution-recording.md` — Complete guide for metrics recording
 - **Skill 10**: `checklist-integration.md` — Complete guide for test validation
 
