@@ -9,10 +9,11 @@ import type { ServerCtxType } from '../../../lib/utils/types';
  * Follows the Inter-Train provider pattern.
  */
 export function userProvider(serverCtx: ServerCtxType) {
-  const db = DatabaseService.getInstance().client;
+  // Use passed database from context or fall back to default instance
+  const db = serverCtx.database?.client || DatabaseService.getInstance().client;
 
   async function getUserById(userId: string) {
-    const result = await db.$queryRaw<Array<any>>`
+    const result = await db.$queryRaw`
       SELECT * FROM users
       WHERE id = ${userId}
       LIMIT 1
@@ -21,7 +22,7 @@ export function userProvider(serverCtx: ServerCtxType) {
   }
 
   async function getUserByEmail(email: string) {
-    const result = await db.$queryRaw<Array<any>>`
+    const result = await db.$queryRaw`
       SELECT * FROM users
       WHERE email = ${email}
       LIMIT 1
@@ -30,7 +31,7 @@ export function userProvider(serverCtx: ServerCtxType) {
   }
 
   async function getAllUsers(limit: number = 20, offset: number = 0) {
-    const result = await db.$queryRaw<Array<any>>`
+    const result = await db.$queryRaw`
       SELECT * FROM users
       ORDER BY "createdAt" DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -39,14 +40,14 @@ export function userProvider(serverCtx: ServerCtxType) {
   }
 
   async function getUserCount() {
-    const result = await db.$queryRaw<Array<{ count: number }>>`
+    const result = await db.$queryRaw`
       SELECT COUNT(*) as count FROM users
     `;
     return result?.[0]?.count || 0;
   }
 
   async function createUser(input: { id: string; email: string; name: string }) {
-    const result = await db.$queryRaw<Array<any>>`
+    const result = await db.$queryRaw`
       INSERT INTO users (id, email, name, "isActive", "createdAt", "updatedAt")
       VALUES (
         ${input.id},
@@ -82,7 +83,7 @@ export function userProvider(serverCtx: ServerCtxType) {
     updates.push(`"updatedAt" = NOW()`);
 
     const updateClause = updates.join(', ');
-    const result = await db.$queryRawUnsafe<Array<any>>(
+    const result = await db.$queryRawUnsafe(
       `UPDATE users SET ${updateClause} WHERE id = $${values.length + 1} RETURNING *`,
       ...values,
       userId
@@ -99,7 +100,7 @@ export function userProvider(serverCtx: ServerCtxType) {
   }
 
   async function softDeleteUser(userId: string) {
-    const result = await db.$queryRaw<Array<any>>`
+    const result = await db.$queryRaw`
       UPDATE users
       SET "isActive" = false, "updatedAt" = NOW()
       WHERE id = ${userId}
@@ -109,7 +110,7 @@ export function userProvider(serverCtx: ServerCtxType) {
   }
 
   async function searchUsers(searchTerm: string, limit: number = 20, offset: number = 0) {
-    const result = await db.$queryRaw<Array<any>>`
+    const result = await db.$queryRaw`
       SELECT * FROM users
       WHERE
         email ILIKE ${'%' + searchTerm + '%'} OR

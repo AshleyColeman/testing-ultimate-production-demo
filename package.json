@@ -11,6 +11,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
+    "test:selective": "node test-selective.cjs",
     "demo": "vitest run src/__tests__/ultimateProductionDemo.test.ts --reporter=verbose",
     "demo:ultimate": "vitest run src/__tests__/ultimateProductionDemo.test.ts --reporter=verbose --no-coverage",
     "prisma:generate": "prisma generate",

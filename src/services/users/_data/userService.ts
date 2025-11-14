@@ -31,6 +31,7 @@ export interface UpdateUserInput {
  * Follows the Inter-Train service pattern.
  */
 export function userService(serverCtx: ServerCtxType) {
+  // Pass the entire serverCtx (including database) to the provider
   const _provider = userProvider(serverCtx);
   const logger = new Logger('UserService');
 

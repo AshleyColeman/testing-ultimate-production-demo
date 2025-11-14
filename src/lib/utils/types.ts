@@ -8,6 +8,7 @@ export interface ServerCtxType {
   companyUserId?: number;
   userRole?: 'admin' | 'supervisor' | 'user';
   permissions?: string[];
+  database?: any; // Optional database instance for testing
 }
 
 export interface PaginationParams {

@@ -50,6 +50,8 @@ These scripts will:
 
 ## 🎯 Running the Demo
 
+### Option 1: Full Test Suite (Recommended)
+
 After setup, run the demo with **ONE command**:
 
 ```bash
@@ -63,6 +65,39 @@ That's it! The orchestrator handles:
 - Discovering all 53 test files
 - Executing 530 tests
 - Cleaning up everything
+
+### Option 2: 🆕 Selective Test Runner (NEW!)
+
+Run individual test files with full infrastructure support:
+
+```bash
+# Using npm script (recommended)
+npm run test:selective user-actions.test.ts
+
+# Or using vitest directly
+npx vitest run src/__tests__/selectiveTestRunner.test.ts -- auth-login.test.ts
+```
+
+**What it does:**
+- ✅ Creates full infrastructure (5 containers, 20 schemas)
+- ✅ Loads only your specified test file
+- ✅ Provides same environment as full suite
+- ✅ Perfect for development and debugging
+- ✅ Much faster than running all 530+ tests
+
+**Examples:**
+```bash
+npm run test:selective user-actions.test.ts
+npm run test:selective auth-login.test.ts
+npm run test:selective payment-process.test.ts
+npm run test:selective inventory-stock.test.ts
+```
+
+**When to use:**
+- 🛠️ **Development**: Test specific functionality quickly
+- 🐛 **Debugging**: Isolate failing tests
+- 🚀 **CI/CD**: Run targeted tests in PR pipelines
+- 📊 **Performance**: Skip unrelated tests
 
 ### Expected Output (With Demo Failures Present)
 
@@ -347,12 +382,46 @@ npx vitest run src/__tests__/microservices/auth-*.test.ts
 npx vitest run src/__tests__/microservices/payment-*.test.ts
 ```
 
+**Q: Can I run individual tests with full infrastructure?**
+
+```bash
+# 🆕 NEW: Use the selective test runner with full infrastructure
+npm run test:selective user-actions.test.ts
+npm run test:selective auth-login.test.ts
+npm run test:selective payment-process.test.ts
+
+# This creates full infrastructure (5 containers, 20 schemas) but runs only your test
+```
+
+**Q: What's the difference between selective runner vs direct vitest?**
+
+```bash
+# ❌ Direct vitest - NO INFRASTRUCTURE (will fail)
+npx vitest run src/__tests__/microservices/user-actions.test.ts
+
+# ✅ Selective runner - FULL INFRASTRUCTURE (works perfectly)
+npm run test:selective user-actions.test.ts
+```
+
+**Q: What happens if I run the selective runner without arguments?**
+
+The runner will show you:
+- Clear error message explaining what's missing
+- Usage examples for correct syntax
+- List of available test files you can run
+- Helpful guidance to get you started
+
+```bash
+npm run test:selective
+# Shows helpful error with examples and available test files
+```
+
 **Q: Can I see individual test failures?**
 
 ```bash
-# Run error demo files individually
-npx vitest run src/__tests__/microservices/broken-test-demo.test.ts
-npx vitest run src/__tests__/microservices/payment-validation-errors.test.ts
+# Run error demo files with selective runner (recommended)
+npm run test:selective -- broken-test-demo.test.ts
+npm run test:selective -- payment-validation-errors.test.ts
 ```
 
 ---
@@ -361,7 +430,8 @@ npx vitest run src/__tests__/microservices/payment-validation-errors.test.ts
 
 This demo showcases:
 
-- ✅ **530 tests** running from **ONE command**
+- ✅ **530+ tests** running from **ONE command**
+- ✅ **🆕 Selective testing** with full infrastructure support
 - ✅ **5 containers** shared by all tests
 - ✅ **20 schemas** for isolation
 - ✅ **45-90 seconds** execution time (realistic delays)
@@ -370,8 +440,10 @@ This demo showcases:
 - ✅ **Realistic delays** (50ms-10s operations)
 - ❌ **Fails CI/CD** when tests fail (protects master branch)
 
-**Ready to run?** Use the setup script, then execute the orchestrator!
+**🚀 Quick Start Options:**
+- **Full Suite:** `npx vitest run src/__tests__/ultimateProductionDemo.test.ts`
+- **Selective:** `npm run test:selective user-actions.test.ts` (NEW!)
 
 **For production:** Remove the 3 demo failure files, and all tests will pass ✅
 
-**Ready to run? Use the setup script, then execute the orchestrator!** 🚀
+**Ready to run?** Use the setup script, then choose your testing approach! 🚀
