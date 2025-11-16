@@ -1,7 +1,17 @@
 import { Logger } from '../../../utils/Logger';
 import { userProvider } from './userProvider';
 import { baseEntityMapper } from '../../../lib/utils/mappers';
-import type { ServerCtxType, PaginationParams, FilterParams, ServiceResponse, PaginatedResponse } from '../../../lib/utils/types';
+import type {
+  ServerCtxType,
+  ServiceResponse,
+  PaginatedResponse,
+} from '../../../lib/utils/types';
+import type { z } from 'zod';
+import {
+  CreateUserSchema,
+  UpdateUserSchema,
+  UserFiltersSchema,
+} from './userSchema';
 
 // Define our own User interface that matches what our mapper produces
 export interface User {
@@ -13,15 +23,9 @@ export interface User {
   updatedAt: string;
 }
 
-export interface CreateUserInput {
-  email: string;
-  name: string;
-}
-
-export interface UpdateUserInput {
-  name?: string;
-  isActive?: boolean;
-}
+export type CreateUserInput = z.infer<typeof CreateUserSchema>;
+export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
+export type UserFiltersInput = z.infer<typeof UserFiltersSchema>;
 
 /**
  * User Service
@@ -87,12 +91,12 @@ export function userService(serverCtx: ServerCtxType) {
     }
   }
 
-  async function getAllUsers(pagination?: PaginationParams): Promise<PaginatedResponse<User>> {
+  async function getAllUsers(filters: UserFiltersInput): Promise<PaginatedResponse<User>> {
     const startTime = Date.now();
 
     try {
-      const limit = pagination?.limit || 20;
-      const offset = ((pagination?.page || 1) - 1) * limit;
+      const limit = filters.limit || 20;
+      const offset = ((filters.page || 1) - 1) * limit;
 
       const [rawUsers, totalCount] = await Promise.all([
         _provider.getAllUsers(limit, offset),
@@ -104,7 +108,7 @@ export function userService(serverCtx: ServerCtxType) {
       );
 
       const totalPages = Math.ceil(totalCount / limit);
-      const currentPage = pagination?.page || 1;
+      const currentPage = filters.page || 1;
 
       const result: PaginatedResponse<User> = {
         data: users,
@@ -160,8 +164,7 @@ export function userService(serverCtx: ServerCtxType) {
       }
 
       // Create user
-      const userId = _generateId();
-      const rawResult = await _provider.createUser({ id: userId, ...input });
+      const rawResult = await _provider.createUser(input);
 
       if (!rawResult) {
         return {
@@ -287,7 +290,7 @@ export function userService(serverCtx: ServerCtxType) {
     }
   }
 
-  async function searchUsers(filters: FilterParams & PaginationParams): Promise<PaginatedResponse<User>> {
+  async function searchUsers(filters: UserFiltersInput): Promise<PaginatedResponse<User>> {
     const startTime = Date.now();
 
     try {

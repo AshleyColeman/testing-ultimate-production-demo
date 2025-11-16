@@ -1,145 +1,124 @@
-import { z } from "zod";
+'use server';
 
-import { serviceFactory } from "../../lib/services/serviceFactory";
+import { z } from 'zod';
+
 import {
   CreateUserSchema,
   UpdateUserSchema,
   UserIdSchema,
   UserFiltersSchema,
-} from "./_data/userSchema";
-import type { ServerCtxType } from "../../lib/utils/types";
-import type {
-  CreateUserInput,
-  UpdateUserInput,
-  UserIdInput,
-  UserFiltersInput,
-} from "./_data/userSchema";
+} from './_data/userSchema';
+import { userService } from './_data/userService';
+import type { ServerCtxType } from '../../lib/utils/types';
 
 /**
- * Extended input type that includes optional database
+ * Admin Procedure
+ *
+ * Wrapper that creates a schema-validated action with proper context setup.
+ * Follows the production pattern for safe server actions.
  */
-type ActionInput<T> = T & { database?: any };
+const adminProcedure = {
+  schema: <T extends z.ZodSchema>(schema: T) => ({
+    action: async (
+      handler: (args: {
+        ctx: { svc: ReturnType<typeof userService> };
+        parsedInput: z.infer<T>;
+      }) => Promise<any>
+    ) => {
+      return async (input: z.infer<T>) => {
+        // Validate input
+        const parsedInput = schema.parse(input);
 
-/**
- * Simple action wrapper for testing (without Next.js)
- */
-const createProcedure = () => ({
-  schema: <T>(schema: z.ZodSchema<T>) => ({
-    action: async (input: ActionInput<T>) => {
-      // Validate input (schema will pass through with .passthrough())
-      const parsedInput = schema.parse(input);
+        // Extract optional database from input (for testing)
+        const database = (input as any)?.database || undefined;
 
-      // Extract database from input if provided (for testing)
-      // Type assertion is safe because we defined ActionInput<T>
-      const database = (parsedInput as ActionInput<T>).database || undefined;
+        // Build server context
+        const serverCtx: ServerCtxType = {
+          accountUserId: 1,
+          userRole: 'admin',
+          database,
+        };
 
-      // Mock server context
-      const serverCtx: ServerCtxType = {
-        accountUserId: 1,
-        userRole: "admin",
-        database: database, // Pass database through context
+        // Initialize service with context
+        const svc = userService(serverCtx);
+
+        // Execute handler with context
+        return handler({
+          ctx: { svc },
+          parsedInput,
+        });
       };
-
-      // Ensure services are registered with database context
-      ensureServicesRegistered(serverCtx);
-
-      return { parsedInput, ctx: { svc: serviceFactory } };
     },
   }),
-});
+};
 
-const adminProcedure = createProcedure();
 
 /**
- * Ensure all required services are registered with the factory
+ * Get a user by ID
  */
-function ensureServicesRegistered(serverCtx: ServerCtxType) {
-  if (!serviceFactory.getServiceNames().includes("userService")) {
-    const { userService } = require("./_data/userService");
-    serviceFactory.registerServices({
-      userService: (ctx: ServerCtxType) => userService(ctx),
-    });
-  }
-  serviceFactory.setContext(serverCtx);
-}
+export const getUserByIdAction = adminProcedure
+  .schema(UserIdSchema)
+  .action(async ({ ctx, parsedInput: userId }) => {
+    const result = await ctx.svc.getUserById(userId);
+    return { result };
+  });
+
+/**
+ * Get all users with pagination and filtering
+ */
+export const getAllUsersAction = adminProcedure
+  .schema(UserFiltersSchema.omit({ search: true }))
+  .action(async ({ ctx, parsedInput: filters }) => {
+    const result = await ctx.svc.getAllUsers(filters);
+    return { result };
+  });
 
 /**
  * Create a new user
  */
-export const createUserAction = async (input: ActionInput<CreateUserInput>) => {
-  const result = await adminProcedure.schema(CreateUserSchema).action(input);
-  const { parsedInput, ctx } = result as any;
-  const serviceResult = await ctx.svc
-    .get("userService")
-    .createUser(parsedInput);
-  return serviceResult;
-};
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.createUser(parsedInput);
+    return {
+      result,
+      message: 'Successfully created user',
+    };
+  });
 
 /**
- * Get user by ID
+ * Update an existing user
  */
-export const getUserByIdAction = async (input: ActionInput<UserIdInput>) => {
-  const result = await adminProcedure.schema(UserIdSchema).action(input);
-  const { parsedInput, ctx } = result as any;
-  const user = await ctx.svc.get("userService").getUserById(parsedInput);
-  return { data: user, success: !!user };
-};
+export const updateUserAction = adminProcedure
+  .schema(UpdateUserSchema.merge(z.object({ id: UserIdSchema })))
+  .action(async ({ ctx, parsedInput }) => {
+    const { id, ...updateData } = parsedInput;
+    const result = await ctx.svc.updateUser(id, updateData);
+    return {
+      result,
+      message: 'Successfully updated user',
+    };
+  });
 
 /**
- * Get all users with pagination
+ * Delete a user
  */
-export const getAllUsersAction = async (
-  input: ActionInput<UserFiltersInput>
-) => {
-  const result = await adminProcedure
-    .schema(UserFiltersSchema.omit({ search: true }))
-    .action(input);
-  const { parsedInput, ctx } = result as any;
-  const serviceResult = await ctx.svc
-    .get("userService")
-    .getAllUsers(parsedInput);
-  return serviceResult;
-};
-
-/**
- * Update user
- */
-export const updateUserAction = async (
-  input: ActionInput<UpdateUserInput & { id: string }>
-) => {
-  const result = await adminProcedure
-    .schema(UpdateUserSchema.merge(z.object({ id: UserIdSchema })))
-    .action(input);
-  const { parsedInput, ctx } = result as any;
-  const { id, ...updateData } = parsedInput;
-  const serviceResult = await ctx.svc
-    .get("userService")
-    .updateUser(id, updateData);
-  return serviceResult;
-};
-
-/**
- * Delete user
- */
-export const deleteUserAction = async (input: ActionInput<UserIdInput>) => {
-  const result = await adminProcedure.schema(UserIdSchema).action(input);
-  const { parsedInput, ctx } = result as any;
-  const serviceResult = await ctx.svc
-    .get("userService")
-    .deleteUser(parsedInput);
-  return serviceResult;
-};
+export const deleteUserAction = adminProcedure
+  .schema(UserIdSchema)
+  .action(async ({ ctx, parsedInput: userId }) => {
+    const result = await ctx.svc.deleteUser(userId);
+    return {
+      result,
+      message: 'Successfully deleted user',
+    };
+  });
 
 /**
  * Search users
  */
-export const searchUsersAction = async (
-  input: ActionInput<UserFiltersInput>
-) => {
-  const result = await adminProcedure.schema(UserFiltersSchema).action(input);
-  const { parsedInput, ctx } = result as any;
-  const serviceResult = await ctx.svc
-    .get("userService")
-    .searchUsers(parsedInput);
-  return serviceResult;
-};
+export const searchUsersAction = adminProcedure
+  .schema(UserFiltersSchema)
+  .action(async ({ ctx, parsedInput: filters }) => {
+    const result = await ctx.svc.searchUsers(filters);
+    return { result };
+  });

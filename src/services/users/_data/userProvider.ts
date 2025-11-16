@@ -6,16 +6,17 @@ import type { ServerCtxType } from '../../../lib/utils/types';
  *
  * Pure database operations layer for user management.
  * Contains no business logic - only database interactions.
- * Follows the Inter-Train provider pattern.
+ * Follows the Inter-Train provider pattern with context-based database initialization.
  */
 export function userProvider(serverCtx: ServerCtxType) {
-  // Use passed database from context or fall back to default instance
+  // Use database from context (passed during service initialization)
+  // Falls back to default DatabaseService instance if not provided
   const db = serverCtx.database?.client || DatabaseService.getInstance().client;
 
   async function getUserById(userId: string) {
     const result = await db.$queryRaw`
-      SELECT * FROM users
-      WHERE id = ${userId}
+      SELECT * FROM User
+      WHERE id = ${parseInt(userId, 10)}
       LIMIT 1
     `;
     return (result && result.length > 0) ? result[0] : null;
@@ -23,7 +24,7 @@ export function userProvider(serverCtx: ServerCtxType) {
 
   async function getUserByEmail(email: string) {
     const result = await db.$queryRaw`
-      SELECT * FROM users
+      SELECT * FROM User
       WHERE email = ${email}
       LIMIT 1
     `;
@@ -32,7 +33,7 @@ export function userProvider(serverCtx: ServerCtxType) {
 
   async function getAllUsers(limit: number = 20, offset: number = 0) {
     const result = await db.$queryRaw`
-      SELECT * FROM users
+      SELECT * FROM User
       ORDER BY "createdAt" DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
@@ -41,21 +42,22 @@ export function userProvider(serverCtx: ServerCtxType) {
 
   async function getUserCount() {
     const result = await db.$queryRaw`
-      SELECT COUNT(*) as count FROM users
+      SELECT COUNT(*) as count FROM User
     `;
-    return result?.[0]?.count || 0;
+    // Convert BigInt to number
+    const count = result?.[0]?.count;
+    return count ? Number(count) : 0;
   }
 
-  async function createUser(input: { id: string; email: string; name: string }) {
+  async function createUser(input: { email: string; name: string }) {
     const result = await db.$queryRaw`
-      INSERT INTO users (id, email, name, "isActive", "createdAt", "updatedAt")
+      INSERT INTO User (email, name, "isActive", "createdAt", "updatedAt")
       VALUES (
-        ${input.id},
         ${input.email},
         ${input.name},
         true,
-        NOW(),
-        NOW()
+        datetime('now'),
+        datetime('now')
       )
       RETURNING *
     `;
@@ -80,13 +82,13 @@ export function userProvider(serverCtx: ServerCtxType) {
       return getUserById(userId);
     }
 
-    updates.push(`"updatedAt" = NOW()`);
+    updates.push(`"updatedAt" = datetime('now')`);
 
     const updateClause = updates.join(', ');
     const result = await db.$queryRawUnsafe(
-      `UPDATE users SET ${updateClause} WHERE id = $${values.length + 1} RETURNING *`,
+      `UPDATE User SET ${updateClause} WHERE id = $${values.length + 1} RETURNING *`,
       ...values,
-      userId
+      parseInt(userId, 10)
     );
 
     return (result && result.length > 0) ? result[0] : null;
@@ -94,16 +96,16 @@ export function userProvider(serverCtx: ServerCtxType) {
 
   async function deleteUser(userId: string) {
     const result = await db.$queryRaw`
-      DELETE FROM users WHERE id = ${userId}
+      DELETE FROM User WHERE id = ${parseInt(userId, 10)}
     `;
     return result;
   }
 
   async function softDeleteUser(userId: string) {
     const result = await db.$queryRaw`
-      UPDATE users
-      SET "isActive" = false, "updatedAt" = NOW()
-      WHERE id = ${userId}
+      UPDATE User
+      SET "isActive" = false, "updatedAt" = datetime('now')
+      WHERE id = ${parseInt(userId, 10)}
       RETURNING *
     `;
     return (result && result.length > 0) ? result[0] : null;
@@ -111,10 +113,10 @@ export function userProvider(serverCtx: ServerCtxType) {
 
   async function searchUsers(searchTerm: string, limit: number = 20, offset: number = 0) {
     const result = await db.$queryRaw`
-      SELECT * FROM users
+      SELECT * FROM User
       WHERE
-        email ILIKE ${'%' + searchTerm + '%'} OR
-        name ILIKE ${'%' + searchTerm + '%'}
+        LOWER(email) LIKE LOWER(${'%' + searchTerm + '%'}) OR
+        LOWER(name) LIKE LOWER(${'%' + searchTerm + '%'})
       ORDER BY "createdAt" DESC
       LIMIT ${limit} OFFSET ${offset}
     `;

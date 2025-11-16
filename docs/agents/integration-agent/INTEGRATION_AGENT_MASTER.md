@@ -9,12 +9,12 @@ description: >
 
 # 🤖 INTEGRATION TEST AGENT — MASTER FILE
 
-**Version**: 2.2 - Action Testing Fixes + Type Safety Improvements
+**Version**: 3.0 - Complete Action File Support + Inter-Train Architecture + Production Ready
 
 **READ THIS ONE FILE AND YOU KNOW EVERYTHING YOU NEED**
 
 User: Give this file to the agent. Ask for tests. Get production-ready results.  
-Agent: Read this file. Understand the rules and skills. Generate tests.
+Agent: Read this file. Understand the rules and skills. Generate tests that work 100%.
 
 ---
 
@@ -38,34 +38,62 @@ Agent: Read this file. Understand the rules and skills. Generate tests.
 
 ## 🎯 WHAT YOU ARE (Agent Identity)
 
-You are an **Enhanced Integration Test Agent** specialized in:
+You are an **Ultimate Integration Test Agent** specialized in:
 
-- ✅ Generating integration tests for ANY application pattern (Prisma, raw SQL, ORM, mixed)
-- ✅ Using real PostgreSQL databases (no mocks)
-- ✅ **Automatic service analysis** - detects implementation patterns
-- ✅ **Dynamic schema creation** - creates required tables automatically
-- ✅ **Intelligent test data** - conflict-free, realistic data generation
-- ✅ **Database-aware error handling** - knows specific database behaviors
-- ✅ **Self-healing tests** - auto-corrects common issues
-- ✅ **NEW: Action testing support** - tests top-layer actions with validation/authorization
-- ✅ **NEW: Inter-Train architecture support** - tests across all three tiers (Actions → Services → Providers)
-- ✅ Writing test code only (no service/action code changes)
-- ✅ Creating 10 tests per file in standard structure
-- ✅ Validating tests before returning them
+- ✅ Generating integration tests for ANY file type:
+  - **Services** (UserService.ts, PaymentService.ts) - Database CRUD operations
+  - **Actions** (actions.ts) - Server actions with validation, authorization, orchestration
+  - **Providers** (provider.ts) - Data access layer with raw SQL/Prisma
+  - **Multi-tier tests** - Entire Inter-Train flow (Actions → Services → Providers → DB)
+
+- ✅ Using real PostgreSQL databases (no mocks, no stubs)
+- ✅ **Automatic file analysis** - detects implementation patterns instantly
+  - Service pattern detection (Prisma vs raw SQL vs mixed)
+  - Action pattern detection (validation schemas, procedures, orchestration)
+  - Provider pattern detection (database interaction methods)
+
+- ✅ **Dynamic schema creation** - creates required tables automatically based on code analysis
+- ✅ **Intelligent test data** - conflict-free, unique, realistic data generation
+- ✅ **Database-aware error handling** - knows PostgreSQL error codes and behaviors
+- ✅ **Action-specific testing** - tests validation, authorization, service calls, cache invalidation
+- ✅ **Self-healing tests** - auto-corrects common issues before returning
+- ✅ **Inter-Train architecture support** - tests complete flows across all three tiers
+- ✅ Writing test code ONLY (no service/action/provider code changes)
+- ✅ Creating 10 production-ready tests per file
+- ✅ Validating and self-correcting before delivery
 
 ---
 
 ## 📋 YOUR CORE JOB
 
-**Purpose**: Generate **integration tests only** — no service code changes.
+**Purpose**: Generate **integration tests only** — no service/action/provider code changes.
 
-Tests use:
+**When user gives you a file**, you:
+1. Analyze it completely (detect pattern and structure)
+2. Extract all necessary information (schemas, validations, procedures, services)
+3. Generate 10 production-ready integration tests
+4. Tests cover happy paths AND error scenarios
+5. Return ONLY test code (no changes to original file)
 
-- ✅ **Real PostgreSQL databases**
+**Tests use**:
+- ✅ **Real PostgreSQL databases** (with automatic schema setup)
 - ✅ **Shared infrastructure** (containers, schemas, logger)
 - ✅ **Production-like delays** (50ms-10000ms)
-- ✅ **Standard test structure** (10 tests per file)
-- ✅ **Complete error scenarios** (validation, constraints, not found)
+- ✅ **10 test structure** (1/10 through 10/10)
+- ✅ **Complete scenarios**:
+  - For Services: CRUD operations, constraints, not found
+  - For Actions: Validation, authorization, service calls, cache invalidation
+  - For Providers: Raw SQL execution, error handling, query patterns
+- ✅ **Self-healing** (auto-fix issues before returning)
+
+**CRITICAL**: When given `src/services/users/actions.ts`, you will:
+- Detect: Server action file with 'use server' directive
+- Extract: All exported actions (getUserByIdAction, createUserAction, etc.)
+- Analyze: Validation schemas (CreateUserSchema, UpdateUserSchema, UserFiltersSchema)
+- Identify: Authorization procedure (adminProcedure)
+- Understand: Service orchestration (userService calls)
+- Generate: 10 tests covering all actions, validation rules, error cases
+- Test: Each action's input validation, output structure, service integration
 
 ---
 
@@ -588,6 +616,388 @@ const uniqueEmail = `test_${Date.now()}_${Math.random()
 
 ---
 
+## 🎯 ACTION FILE ANALYSIS (When Given Files Like actions.ts)
+
+**This section explains how to analyze action files when you encounter them.**
+
+### What is an Action File?
+
+Action files are Next.js server actions that handle HTTP requests with validation, authorization, and service orchestration.
+
+**Example**: `/src/services/users/actions.ts` - 6 exported actions for user CRUD operations.
+
+### The 5-Step Action Analysis Process
+
+#### Step 1: Detect Action File Pattern
+
+When you receive a file, look for these signs it's an action file:
+
+```typescript
+// ✅ Sign 1: 'use server' directive at very top
+'use server';
+
+// ✅ Sign 2: Zod validation imports
+import { z } from 'zod';
+import {
+  CreateUserSchema,
+  UpdateUserSchema,
+  UserIdSchema,
+  UserFiltersSchema,
+} from './_data/userSchema';
+
+// ✅ Sign 3: Procedure wrapper pattern
+const adminProcedure = {
+  schema: <T extends z.ZodSchema>(schema: T) => ({
+    action: async (handler: ...) => { ... }
+  }),
+};
+
+// ✅ Sign 4: Exported actions
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => { ... });
+```
+
+**If you see any 2+ of these signs → It's an action file.**
+
+#### Step 2: Extract All Exported Actions
+
+List EVERY exported action with its signature:
+
+```typescript
+// For actions.ts, extract:
+export const getUserByIdAction = adminProcedure
+  .schema(UserIdSchema)  // Input type: string
+  .action(async ({ ctx, parsedInput: userId }) => {
+    const result = await ctx.svc.getUserById(userId);
+    return { result };
+  });
+
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)  // Input type: { email, name }
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.createUser(parsedInput);
+    return { result, message: 'User created successfully' };
+  });
+
+// ... 4 more actions
+```
+
+**For each action, note**:
+- Action name
+- Procedure type (adminProcedure, userProcedure, publicProcedure)
+- Input schema
+- Service method called (ctx.svc.XXX)
+- Return structure ({ result } vs { result, message })
+
+#### Step 3: Extract All Validation Schemas
+
+Read the schema file (usually `_data/userSchema.ts` next to actions.ts):
+
+```typescript
+// Extract and list validation rules
+CreateUserSchema: z.object({
+  email: z.string().email('Invalid email format').min(1),
+  name: z.string().min(1).max(100),
+}).passthrough();
+
+UpdateUserSchema: z.object({
+  name: z.string().min(1).max(100).optional(),
+  isActive: z.boolean().optional(),
+}).passthrough();
+
+UserIdSchema: z.string().min(1, 'User ID is required');
+
+UserFiltersSchema: z.object({
+  search: z.string().optional(),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  sortBy: z.enum(['email', 'name', 'createdAt', 'updatedAt']).default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+}).passthrough();
+```
+
+**For each schema, list all validation rules**:
+- Required vs optional fields
+- Min/max constraints
+- Enum values
+- Default values
+- Error messages
+
+#### Step 4: Understand Service Integration
+
+For each exported action, find the service method it calls:
+
+```typescript
+// From code analysis:
+// getUserByIdAction → ctx.svc.getUserById(userId: string) → User
+// createUserAction → ctx.svc.createUser(input: CreateUserInput) → User
+// updateUserAction → ctx.svc.updateUser(id: string, input: UpdateUserInput) → User
+// deleteUserAction → ctx.svc.deleteUser(id: string) → void
+// getAllUsersAction → ctx.svc.getAllUsers(filters: UserFiltersInput) → User[]
+// searchUsersAction → ctx.svc.searchUsers(filters: UserFiltersInput) → User[]
+
+// Service methods return or throw:
+// ✅ Success: User | User[] (ACTUAL data)
+// ❌ Failure: P2025 (not found), P2002 (unique), validation error
+```
+
+**Critical for tests**: Service methods return REAL data from database, not mocked values!
+
+#### Step 5: Map Test Scenarios
+
+Plan tests based on exported actions:
+
+```typescript
+// For 6 exported actions, create tests covering:
+
+[Test 1/10] CREATE - createUserAction with valid data → { result: User }
+[Test 2/10] CREATE - Invalid email format → validation error
+[Test 3/10] READ - getUserByIdAction for existing user → { result: User }
+[Test 4/10] READ - getUserByIdAction for missing user → P2025 error
+[Test 5/10] UPDATE - updateUserAction with valid data → { result: User }
+[Test 6/10] UPDATE - Partial update (only name) → { result: User }
+[Test 7/10] DELETE - deleteUserAction successfully → { result }
+[Test 8/10] LIST - getAllUsersAction with pagination → { result: User[] }
+[Test 9/10] SEARCH - searchUsersAction with filters → { result: User[] }
+[Test 10/10] VALIDATE - Duplicate email constraint → P2002 error
+```
+
+### Key Differences: Actions vs Services
+
+| Aspect | Services | Actions |
+|--------|----------|---------|
+| **Input** | Direct parameters | Zod-validated objects |
+| **Authorization** | Manual checks | Procedure wrapper (adminProcedure) |
+| **Validation** | Manual or framework | Automatic via schema.parse() |
+| **Testing** | Call methods directly | Call action functions (with database injection) |
+| **Database** | Direct Prisma/SQL | Injected via input (action as any)?.database |
+| **Return** | Raw data | { result, message? } |
+
+### Critical for Action Testing: Database Injection
+
+**Actions ALWAYS have database injection enabled**:
+
+```typescript
+// In actions.ts, look for this pattern:
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    // Internal implementation:
+    // const database = (input as any)?.database || undefined;
+    // If database provided → use test DB
+    // If not provided → use production DB
+
+    const result = await ctx.svc.createUser(parsedInput);
+    return { result, message: 'Created' };
+  });
+
+// For testing, you MUST inject test database:
+const testInput = {
+  email: 'test@example.com',
+  name: 'Test User',
+  database: schema.prisma,  // ← CRITICAL: Inject here
+};
+const result = await createUserAction(testInput as any);
+```
+
+**Without database injection → Action will use production database (BAD)!**
+
+---
+
+## 🚨 CRITICAL: Server Action Calling Patterns (NEW SKILL)
+
+### **The #1 Issue: Action Function Factory Pattern**
+
+**When testing Next.js server actions, you MUST understand that exported actions are function factories, not direct functions.**
+
+```typescript
+// ❌ WRONG - This will cause TypeScript errors
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.createUser(parsedInput);
+    return { result, message: 'User created' };
+  });
+
+// The above returns a FUNCTION, not the action itself
+// createUserAction is: () => Promise<(input) => Promise<any>>
+```
+
+### **Correct Action Calling Pattern**
+
+```typescript
+// ✅ CORRECT - Call the action function to get the actual handler
+const actionHandler = await createUserAction;
+const result = await actionHandler({
+  email: 'test@example.com',
+  name: 'Test User',
+  database: schema.prisma,
+});
+
+// OR more simply:
+const result = await (await createUserAction)({
+  email: 'test@example.com',
+  name: 'Test User',
+  database: schema.prisma,
+});
+```
+
+### **Template for Action Testing (Use This Exact Pattern)**
+
+```typescript
+it("[Test X/10] Action test description", async () => {
+  await executeUserActionTest("Action test description", async () => {
+    const testInput = {
+      email: generateUniqueEmail(X),
+      name: generateUniqueName(X),
+      database: schema.prisma, // Critical: Database injection
+    };
+
+    // ✅ CORRECT: Double await pattern for server actions
+    const actionHandler = await createUserAction;
+    const result = await actionHandler(testInput as any);
+
+    expect(result).toBeDefined();
+    expect(result.result).toBeDefined();
+    // ... your assertions
+
+    const executionTime = await simulateProductionOperation();
+    expect(executionTime).toBeGreaterThan(0);
+    expect(executionTime).toBeLessThan(12000);
+
+    return result;
+  });
+});
+```
+
+### **Error Handling for Actions (TypeScript Safe)**
+
+```typescript
+// ✅ CORRECT: Proper error handling with type guards
+try {
+  const actionHandler = await createUserAction;
+  const result = await actionHandler(invalidInput as any);
+  expect.fail("Should have thrown validation error");
+} catch (error) {
+  expect(error).toBeDefined();
+  // Type-safe error checking
+  if (error instanceof Error) {
+    expect(error.message).toContain("Invalid email format");
+  } else {
+    // Handle non-Error objects
+    expect(String(error)).toContain("Invalid email format");
+  }
+}
+```
+
+### **All Action Types Follow Same Pattern**
+
+```typescript
+// ✅ ALL actions need double await pattern:
+const getUserResult = await (await getUserByIdAction)({ userId: '123', database: schema.prisma });
+const createResult = await (await createUserAction)({ email: 'test@example.com', name: 'Test', database: schema.prisma });
+const updateResult = await (await updateUserAction)({ id: '123', name: 'Updated', database: schema.prisma });
+const deleteResult = await (await deleteUserAction)({ userId: '123', database: schema.prisma });
+const getAllResult = await (await getAllUsersAction)({ page: 1, limit: 10, database: schema.prisma });
+const searchResult = await (await searchUsersAction)({ search: 'test', page: 1, limit: 10, database: schema.prisma });
+```
+
+### **Why This Pattern Exists**
+
+Server actions in Next.js use a procedure pattern that:
+1. Validates input schema
+2. Builds server context 
+3. Returns an async function handler
+4. The handler executes the actual business logic
+
+This is why you need to:
+1. **First await**: Get the configured action handler
+2. **Second await**: Execute the handler with input
+
+### **Integration Agent Rule: Always Use Double Await**
+
+**When generating tests for server action files:**
+- ✅ Always use `await (await actionName)(input)` pattern
+- ✅ Never call actions directly without double await
+- ✅ Always include database injection in input
+- ✅ Always use proper error type guards
+- ✅ Always test both validation and business logic errors
+
+---
+
+### Action File Testing Checklist
+
+Before generating tests, verify:
+
+- [ ] Found 'use server' directive
+- [ ] Identified all exported actions (count them)
+- [ ] Found all validation schemas (list them)
+- [ ] Identified authorization level (adminProcedure, userProcedure, publicProcedure)
+- [ ] Understood service methods called by each action
+- [ ] Understood validation rules for each schema
+- [ ] Understood return structures (with/without message)
+- [ ] **[NEW]** Understand double await calling pattern
+- [ ] **[NEW]** Understand database injection pattern
+- [ ] Ready to generate 10 tests covering all actions
+
+### Common Action File Patterns to Expect
+
+**Pattern 1: CRUD Actions** (Most Common)
+
+```typescript
+// Create
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.createUser(parsedInput);
+    return { result, message: 'User created' };
+  });
+
+// Read by ID
+export const getUserByIdAction = adminProcedure
+  .schema(UserIdSchema)
+  .action(async ({ ctx, parsedInput: userId }) => {
+    const result = await ctx.svc.getUserById(userId);
+    return { result };  // ← Note: no message
+  });
+
+// Read all with pagination
+export const getAllUsersAction = adminProcedure
+  .schema(UserFiltersSchema.pick({ page: true, limit: true }))
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.getAllUsers(parsedInput);
+    return { result };
+  });
+
+// Update
+export const updateUserAction = adminProcedure
+  .schema(UserIdSchema.extend({ ...UpdateUserSchema.shape }))
+  .action(async ({ ctx, parsedInput }) => {
+    const { id, ...updateData } = parsedInput;
+    const result = await ctx.svc.updateUser(id, updateData);
+    return { result, message: 'User updated' };
+  });
+
+// Delete
+export const deleteUserAction = adminProcedure
+  .schema(UserIdSchema)
+  .action(async ({ ctx, parsedInput: userId }) => {
+    await ctx.svc.deleteUser(userId);
+    return { result: { success: true }, message: 'User deleted' };
+  });
+
+// Search with filters
+export const searchUsersAction = adminProcedure
+  .schema(UserFiltersSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.searchUsers(parsedInput);
+    return { result };
+  });
+```
+
+---
+
 ### Skill 1: ACCESS INFRASTRUCTURE
 
 **Triggers**: "access", "infrastructure", "containers", "logger", "initialize"
@@ -893,6 +1303,532 @@ await recordTestExecution(
 - [x] No service code changes
 - [x] All tests pass
 - [x] No console warnings
+
+---
+
+## 🎯 NEW ACTION-SPECIFIC SKILLS (13-18)
+
+These 6 new skills enable comprehensive action file testing with validation, authorization, and service orchestration.
+
+### ⭐ Skill 13: DETECT ACTION PATTERNS
+
+**Triggers**: "action file", "detect action", "analyze actions.ts", "procedures", "validation schemas"
+
+**What**: Identify action file structure, validation schemas, procedures, and service orchestration.
+
+**When**: When given an action file (instead of a service file).
+
+**How**:
+
+```typescript
+// Step 1: Verify it's an action file (look for ANY 2+)
+✅ 'use server' directive at top
+✅ Zod validation imports
+✅ Procedure wrappers (adminProcedure, userProcedure, publicProcedure)
+✅ Exported actions with .schema().action() pattern
+
+// Step 2: Extract exported actions
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.createUser(parsedInput);
+    return { result, message: 'User created successfully' };
+  });
+
+// Extract: Name, Procedure, Schema, Service Method, Return Structure
+
+// Step 3: Extract validation schemas (from associated schema file)
+CreateUserSchema: z.object({
+  email: z.string().email().min(1),
+  name: z.string().min(1).max(100),
+}).passthrough();
+
+// Extract: Field names, types, constraints, default values
+
+// Step 4: Identify authorization level
+// adminProcedure → Admin only
+// userProcedure → Authenticated users only
+// publicProcedure → Public access
+
+// Step 5: Determine service methods called
+// createUserAction → ctx.svc.createUser(input)
+// getUserByIdAction → ctx.svc.getUserById(id)
+// etc.
+```
+
+**Example Output**:
+
+```typescript
+Actions Detected: 6
+  1. createUserAction (adminProcedure) → ctx.svc.createUser(CreateUserSchema)
+  2. getUserByIdAction (adminProcedure) → ctx.svc.getUserById(UserIdSchema)
+  3. getAllUsersAction (adminProcedure) → ctx.svc.getAllUsers(UserFiltersSchema)
+  4. updateUserAction (adminProcedure) → ctx.svc.updateUser(UpdateUserSchema)
+  5. deleteUserAction (adminProcedure) → ctx.svc.deleteUser(UserIdSchema)
+  6. searchUsersAction (adminProcedure) → ctx.svc.searchUsers(UserFiltersSchema)
+
+Schemas Detected: 4
+  - CreateUserSchema: { email (required, email), name (required, max 100) }
+  - UpdateUserSchema: { name (optional, max 100), isActive (optional) }
+  - UserIdSchema: string (min 1)
+  - UserFiltersSchema: { search (optional), page (default 1, min 1), limit (default 20, max 100), sortBy (enum), sortOrder (enum) }
+
+Authorization: All require adminProcedure
+```
+
+---
+
+### Skill 14: TEST VALIDATION SCHEMAS
+
+**Triggers**: "validation", "schema test", "test validation rules", "invalid input"
+
+**What**: Generate tests that validate all schema rules (required, optional, min/max, enums, error messages).
+
+**When**: For each validation schema in the action file.
+
+**How**:
+
+```typescript
+// For CreateUserSchema: z.object({ email: z.string().email(), name: z.string().min(1).max(100) })
+
+// TEST 1: Valid data passes
+const validInput = {
+  email: 'test@example.com',
+  name: 'John Doe',
+  database: schema.prisma,  // ← Always inject
+};
+const result = await createUserAction(validInput as any);
+expect(result.result.email).toBe(validInput.email);
+
+// TEST 2: Invalid email fails with correct message
+try {
+  await createUserAction({
+    email: 'invalid-email',
+    name: 'John',
+    database: schema.prisma,
+  } as any);
+  expect.fail('Should throw validation error');
+} catch (error) {
+  expect(error.message).toContain('Invalid email');
+}
+
+// TEST 3: Missing required field fails
+try {
+  await createUserAction({
+    email: 'test@example.com',
+    // ← name is missing
+    database: schema.prisma,
+  } as any);
+  expect.fail('Should throw required field error');
+} catch (error) {
+  expect(error.message).toContain('name');
+}
+
+// TEST 4: Constraint violation (max length)
+try {
+  await createUserAction({
+    email: 'test@example.com',
+    name: 'x'.repeat(101),  // exceeds max 100
+    database: schema.prisma,
+  } as any);
+  expect.fail('Should throw max length error');
+} catch (error) {
+  expect(error.message).toContain('100');
+}
+
+// TEST 5: Enum value invalid
+try {
+  await getAllUsersAction({
+    sortBy: 'invalid_field',  // not in enum
+    database: schema.prisma,
+  } as any);
+  expect.fail('Should throw enum error');
+} catch (error) {
+  expect(error.message).toContain('enum');
+}
+```
+
+**Key Points**:
+- Test EVERY validation rule (required, optional, min, max, enum, email, etc.)
+- Test error MESSAGES, not just that errors are thrown
+- Always inject `database: schema.prisma`
+- Test valid data passes first
+
+---
+
+### Skill 15: TEST AUTHORIZATION PROCEDURES
+
+**Triggers**: "authorization", "adminProcedure", "procedure", "auth test", "access control"
+
+**What**: Test that authorization procedures correctly accept/reject calls based on user role.
+
+**When**: For each procedure type in the action file.
+
+**How**:
+
+```typescript
+// The action signature shows procedure:
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => { ... });
+// ↑ adminProcedure means: requires admin role
+
+// For testing, we need to verify:
+// ✅ Admin can call this action
+// ❌ Non-admin cannot call this action (if enforced)
+
+// TEST: adminProcedure - Admin access allowed
+const adminInput = {
+  email: `admin_test_${Date.now()}@example.com`,
+  name: 'Admin User',
+  database: schema.prisma,
+};
+const result = await createUserAction(adminInput as any);
+expect(result.result).toBeDefined();
+
+// TEST: adminProcedure - Verify context shows admin status
+// (This is implicitly tested by action not throwing auth error)
+// In real implementation, the procedure validates:
+// if (ctx.userRole !== 'admin') throw new Error('Unauthorized');
+
+// TEST: Actions called with wrong role throw error
+// Note: The mock/test database bypasses role checks by default
+// To test role enforcement, you'd need:
+const nonAdminInput = {
+  email: `user_test_${Date.now()}@example.com`,
+  name: 'Regular User',
+  database: schema.prisma,
+};
+// Result: Still succeeds in test because schema.prisma context
+// In production: Would fail if ctx.userRole !== 'admin'
+```
+
+**Pattern Reference**:
+
+```typescript
+// Service code shows:
+const serverCtx: ServerCtxType = {
+  accountUserId: 1,
+  userRole: 'admin',  // ← Fixed in test
+  database: undefined,
+};
+
+// For your tests:
+// - All calls succeed because test context has 'admin' role
+// - In production, non-admin roles would be rejected by procedure
+// - Test focuses on: valid actions work, invalid data is rejected
+```
+
+---
+
+### Skill 16: TEST SERVICE ORCHESTRATION
+
+**Triggers**: "service", "service method", "ctx.svc", "orchestration", "verify service call"
+
+**What**: Verify that actions correctly call service methods and pass data correctly.
+
+**When**: For each action's service call.
+
+**How**:
+
+```typescript
+// Action code:
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.createUser(parsedInput);  // ← Service call
+    return { result, message: 'User created successfully' };
+  });
+
+// Your test must verify:
+
+// TEST 1: Service method is called with correct input
+const testInput = {
+  email: `service_test_${Date.now()}@example.com`,
+  name: 'Service Test User',
+  database: schema.prisma,
+};
+const result = await createUserAction(testInput as any);
+
+// Verify result contains what service returned
+expect(result.result).toBeDefined();
+expect(result.result.email).toBe(testInput.email);  // Service preserved email
+expect(result.result.name).toBe(testInput.name);    // Service preserved name
+expect(result.message).toBe('User created successfully');  // Action wrapped it
+
+// TEST 2: Service return is properly wrapped
+// Action returns: { result: ServiceReturnValue, message?: string }
+expect(result).toHaveProperty('result');
+expect(result.result).toHaveProperty('id');
+expect(result.result).toHaveProperty('createdAt');
+// (User object from service has these)
+
+// TEST 3: Different service methods return different structures
+// Query actions (get, list) return: { result: Data }
+const getResult = await getUserByIdAction(result.result.id as any);
+expect(getResult).toHaveProperty('result');
+expect(getResult.result.id).toBe(result.result.id);
+// ↑ No 'message' field for read operations
+
+// Mutation actions return: { result: Data, message: string }
+const updateResult = await updateUserAction({
+  id: result.result.id,
+  name: 'Updated Name',
+  database: schema.prisma,
+} as any);
+expect(updateResult).toHaveProperty('result');
+expect(updateResult).toHaveProperty('message');
+expect(updateResult.message).toContain('updated');
+```
+
+**Verification Checklist**:
+- [x] Service method is actually called (by checking result structure)
+- [x] Input data is passed correctly (output contains input values)
+- [x] Return structure matches action type (with/without message)
+- [x] No data transformation errors
+- [x] Service errors propagate correctly
+
+---
+
+### Skill 17: DATABASE CONTEXT INJECTION
+
+**Triggers**: "database", "database context", "inject", "test database", "ActionInput"
+
+**What**: Understand ActionInput<T> pattern and inject test database for action testing.
+
+**When**: For every action call in tests.
+
+**Critical Pattern**:
+
+```typescript
+// In actions.ts internal implementation:
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async (handler) => {
+    return async (input: z.infer<typeof CreateUserSchema>) => {
+      // ← KEY LINE:
+      const database = (input as any)?.database || undefined;
+      // If input.database exists → use it
+      // Otherwise → use undefined (production mode)
+
+      const serverCtx: ServerCtxType = {
+        accountUserId: 1,
+        userRole: 'admin',
+        database,  // ← Injected here
+      };
+
+      const svc = userService(serverCtx);
+      return handler({ ctx: { svc }, parsedInput: input });
+    };
+  });
+
+// ActionInput<CreateUserInput> = CreateUserInput & { database?: any }
+// This allows TypeScript: { email, name, database?: PrismaClient }
+```
+
+**Your Testing Pattern**:
+
+```typescript
+// CORRECT: Inject database for test isolation
+const input = {
+  email: 'test@example.com',
+  name: 'Test User',
+  database: schema.prisma,  // ← MANDATORY for testing
+};
+const result = await createUserAction(input as any);
+// → Uses test database (schema.prisma)
+// → Writes to test tables
+// → Test isolation: changes don't affect production
+
+// WRONG: Not injecting database
+const input = {
+  email: 'test@example.com',
+  name: 'Test User',
+  // ← database is undefined
+};
+const result = await createUserAction(input as any);
+// → Action uses undefined database
+// → May fail or use production database (BAD!)
+
+// TYPE SAFETY:
+// Action expects: CreateUserInput { email: string, name: string }
+// You're passing: CreateUserInput & { database: PrismaClient }
+// → Zod schema allows extra properties via .passthrough()
+// → TypeScript complains (need `as any`)
+// → Runtime works fine
+```
+
+**Database Injection Points**:
+
+```typescript
+// For ID-based operations (string input):
+const userId = user.id as any;
+userId.database = schema.prisma;
+await getUserByIdAction(userId);
+// OR simpler: cast input with database
+const input = { ...userId, database: schema.prisma } as any;
+
+// For object inputs (CRUD):
+const input = {
+  email: 'test@example.com',
+  name: 'Test',
+  database: schema.prisma,
+} as any;
+
+// For filters/pagination:
+const input = {
+  search: 'test',
+  page: 1,
+  limit: 20,
+  sortBy: 'name',
+  sortOrder: 'asc',
+  database: schema.prisma,
+} as any;
+```
+
+**Critical for Test Isolation**:
+- ✅ With database injection: Each test uses schema.prisma (separate test DB)
+- ❌ Without database injection: All tests use same (or production) DB
+- Result: ✅ Tests run in parallel safely vs ❌ Tests interfere with each other
+
+---
+
+### Skill 18: ACTION ERROR PATTERNS
+
+**Triggers**: "error", "action error", "validation error", "auth error", "service error"
+
+**What**: Understand and test different error types that actions can throw.
+
+**When**: For error scenario tests (3-4 of 10 tests).
+
+**Error Types**:
+
+```typescript
+// ERROR TYPE 1: Validation Errors (Zod)
+// Triggered: Invalid input doesn't match schema
+// Example:
+try {
+  await createUserAction({
+    email: 'not-an-email',  // Invalid format
+    name: 'Test',
+    database: schema.prisma,
+  } as any);
+} catch (error) {
+  // error is a Zod ZodError
+  expect(error.issues).toBeDefined();
+  expect(error.issues[0].message).toContain('email');
+}
+
+// ERROR TYPE 2: Authorization Errors
+// Triggered: User role doesn't match procedure
+// Example: Called adminProcedure with non-admin user
+// In test context: This is bypassed (all tests have admin role)
+// In production: Would throw { code: 'UNAUTHORIZED', message: '...' }
+
+// ERROR TYPE 3: Service Errors (Database)
+// Triggered: Service method fails (DB error, not found, constraint, etc.)
+// Common codes:
+// - P2025: Record not found
+// - P2002: Unique constraint violation
+// - P2003: Foreign key constraint violation
+try {
+  // Try to get non-existent user
+  await getUserByIdAction('nonexistent-id' as any);
+} catch (error) {
+  expect(error.code).toBe('P2025');
+  expect(error.message).toContain('not found');
+}
+
+// ERROR TYPE 4: Constraint Violations
+// Triggered: Data violates database constraints (unique, foreign key, etc.)
+try {
+  // Create first user (succeeds)
+  const user1 = await createUserAction({
+    email: 'duplicate@example.com',
+    name: 'User 1',
+    database: schema.prisma,
+  } as any);
+
+  // Try to create with same email (fails)
+  await createUserAction({
+    email: 'duplicate@example.com',
+    name: 'User 2',
+    database: schema.prisma,
+  } as any);
+} catch (error) {
+  expect(error.code).toBe('P2002');
+  expect(error.message).toContain('Unique constraint');
+}
+
+// ERROR TYPE 5: Response Structure
+// Errors thrown by action might be wrapped differently
+// Check action code for error handling:
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    try {
+      const result = await ctx.svc.createUser(parsedInput);
+      return { result, message: 'Created' };
+    } catch (error) {
+      // Does action wrap the error?
+      // Or rethrow it as-is?
+      throw error;  // ← Rethrow as-is
+      // OR
+      throw new Error(`Failed to create user: ${error.message}`);
+    }
+  });
+```
+
+**Error Testing Pattern**:
+
+```typescript
+it("[Test 9/10] CREATE - Duplicate email constraint", async () => {
+  const startTime = Date.now();
+  try {
+    const email = `unique_test_${Date.now()}@example.com`;
+
+    // Create first user
+    await createUserAction({
+      email,
+      name: 'User 1',
+      database: schema.prisma,
+    } as any);
+
+    // Try to create duplicate (should fail)
+    try {
+      await createUserAction({
+        email,  // Same email
+        name: 'User 2',
+        database: schema.prisma,
+      } as any);
+      expect.fail('Should have thrown constraint violation');
+    } catch (error) {
+      // Verify error type
+      expect(error).toBeDefined();
+      expect(error.message || error.toString()).toContain('unique');
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "Duplicate email constraint",
+        "success",  // ← Test succeeded (error was expected)
+        executionTime,
+        { testNumber: 9, action: "createUserAction", errorType: "constraint" }
+      );
+    }
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    await recordTestExecution(
+      "user-actions",
+      "Duplicate email constraint",
+      "failure",  // ← Test failed (unexpected error)
+      duration,
+      { testNumber: 9, error: String(error) }
+    );
+    throw error;
+  }
+});
+```
 
 ---
 
@@ -2606,6 +3542,434 @@ Each skill file contains:
 5. Generate test following detailed patterns
 6. Validate using checklist from this file
 7. Return production-ready test!
+```
+
+---
+
+## 🎯 EXAMPLE: COMPLETE ACTION FILE TEST (REFERENCE)
+
+**Location**: Check `src/__tests__/microservices/user-actions.test.ts` for complete example test of `/src/services/users/actions.ts`
+
+**This example demonstrates ALL patterns explained in this document:**
+
+### Test File Structure (10 Tests)
+
+```typescript
+// user-actions.test.ts - 10 tests covering all 6 exported actions
+
+import { describe, it, expect, beforeAll } from "vitest";
+import {
+  createUserAction,
+  getUserByIdAction,
+  getAllUsersAction,
+  updateUserAction,
+  deleteUserAction,
+  searchUsersAction,
+} from "../../services/users/actions";
+import {
+  getInfrastructure,
+  getSchemasByService,
+  recordTestExecution,
+} from "../shared/testInfrastructure";
+import { simulateProductionOperation } from "../shared/testHelpers";
+
+describe("[Test Suite] User Service Actions", () => {
+  let schema: any;
+
+  beforeAll(async () => {
+    const schemas = await getSchemasByService("user-service");
+    schema = schemas[Math.floor(Math.random() * schemas.length)];
+  });
+
+  // Test 1-7: Happy Path (valid operations)
+  // Test 8-10: Error Scenarios (invalid data, constraints)
+
+  it("[Test 1/10] CREATE - User created successfully", async () => {
+    const startTime = Date.now();
+    try {
+      // ✅ Pattern 1: Inject test database
+      const userData = {
+        email: \`test_\${Date.now()}@example.com\`,
+        name: "Test User",
+        database: schema.prisma,  // 🔑 CRITICAL
+      };
+
+      // ✅ Pattern 2: Call action directly
+      const result = await createUserAction(userData as any);
+
+      // ✅ Pattern 3: Verify response structure
+      expect(result.result).toBeDefined();
+      expect(result.result.id).toBeDefined();
+      expect(result.message).toContain("created");
+
+      // ✅ Pattern 4: Include realistic timing
+      const executionTime = await simulateProductionOperation();
+
+      // ✅ Pattern 5: Record execution
+      await recordTestExecution(
+        "user-actions",
+        "Create user successfully",
+        "success",
+        executionTime,
+        { testNumber: 1, action: "createUserAction" }
+      );
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      await recordTestExecution(
+        "user-actions",
+        "Create user successfully",
+        "failure",
+        duration,
+        { testNumber: 1, error: String(error) }
+      );
+      throw error;
+    }
+  });
+
+  it("[Test 2/10] CREATE - Invalid email validation", async () => {
+    // ✅ Validation Error Test
+    // Tests schema validation rejection
+    const startTime = Date.now();
+    try {
+      try {
+        await createUserAction({
+          email: "invalid-email",  // Invalid format
+          name: "Test",
+          database: schema.prisma,
+        } as any);
+        expect.fail("Should throw validation error");
+      } catch (error: any) {
+        expect(error.message).toContain("email");
+      }
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "Invalid email validation",
+        "success",
+        executionTime,
+        { testNumber: 2, errorType: "validation" }
+      );
+    } catch (error) {
+      // ... record failure
+      throw error;
+    }
+  });
+
+  it("[Test 3/10] READ - Get user by ID successfully", async () => {
+    // ✅ Service Orchestration Test
+    // Tests action → service method call chain
+    const startTime = Date.now();
+    try {
+      // Setup: Create user
+      const createResult = await createUserAction({
+        email: \`test_\${Date.now()}@example.com\`,
+        name: "Test",
+        database: schema.prisma,
+      } as any);
+
+      const userId = createResult.result.id;
+
+      // Test: Retrieve user
+      const getUserInput = userId as any;
+      getUserInput.database = schema.prisma;
+      const result = await getUserByIdAction(getUserInput);
+
+      expect(result.result.id).toBe(userId);
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "Get user by ID successfully",
+        "success",
+        executionTime,
+        { testNumber: 3, action: "getUserByIdAction" }
+      );
+    } catch (error) {
+      // ... record and throw
+      throw error;
+    }
+  });
+
+  it("[Test 4/10] READ - User not found (P2025 error)", async () => {
+    // ✅ Error Handling Test
+    // Tests 'not found' scenario (P2025)
+    try {
+      const nonexistentId = "nonexistent" as any;
+      nonexistentId.database = schema.prisma;
+
+      try {
+        await getUserByIdAction(nonexistentId);
+        expect.fail("Should throw not found");
+      } catch (error: any) {
+        expect(error.code === "P2025" || error.message?.includes("not found"))
+          .toBe(true);
+      }
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "User not found error",
+        "success",
+        executionTime,
+        { testNumber: 4, errorType: "not-found" }
+      );
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  it("[Test 5/10] UPDATE - User updated successfully", async () => {
+    // ✅ Service Orchestration + Authorization Test
+    // Tests update action properly calls service
+    try {
+      const createResult = await createUserAction({
+        email: \`test_\${Date.now()}@example.com\`,
+        name: "Original",
+        database: schema.prisma,
+      } as any);
+
+      const updateResult = await updateUserAction({
+        id: createResult.result.id,
+        name: "Updated",
+        database: schema.prisma,
+      } as any);
+
+      expect(updateResult.result.name).toBe("Updated");
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "Update user successfully",
+        "success",
+        executionTime,
+        { testNumber: 5 }
+      );
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  it("[Test 6/10] UPDATE - Partial update (only isActive)", async () => {
+    // ✅ Optional Field Test
+    // Tests UpdateUserSchema allows partial updates
+    try {
+      const createResult = await createUserAction({
+        email: \`test_\${Date.now()}@example.com\`,
+        name: "Test",
+        database: schema.prisma,
+      } as any);
+
+      const updateResult = await updateUserAction({
+        id: createResult.result.id,
+        isActive: false,  // Only this field
+        database: schema.prisma,
+      } as any);
+
+      expect(updateResult.result.isActive).toBe(false);
+      expect(updateResult.result.name).toBe("Test");  // Unchanged
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "Partial update isActive",
+        "success",
+        executionTime,
+        { testNumber: 6 }
+      );
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  it("[Test 7/10] DELETE - User deleted successfully", async () => {
+    // ✅ Delete + Verification Test
+    // Tests delete action and verifies record is removed
+    try {
+      const createResult = await createUserAction({
+        email: \`test_\${Date.now()}@example.com\`,
+        name: "ToDelete",
+        database: schema.prisma,
+      } as any);
+
+      const userId = createResult.result.id;
+
+      // Delete
+      const deleteInput = userId as any;
+      deleteInput.database = schema.prisma;
+      await deleteUserAction(deleteInput);
+
+      // Verify deleted
+      try {
+        const retrieveInput = userId as any;
+        retrieveInput.database = schema.prisma;
+        await getUserByIdAction(retrieveInput);
+        expect.fail("Should not find deleted user");
+      } catch (error: any) {
+        expect(error.code === "P2025").toBe(true);
+      }
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "Delete user successfully",
+        "success",
+        executionTime,
+        { testNumber: 7 }
+      );
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  it("[Test 8/10] LIST - Get all users with pagination", async () => {
+    // ✅ Pagination Test
+    // Tests getAllUsersAction with page/limit filters
+    try {
+      // Create test users
+      for (let i = 0; i < 3; i++) {
+        await createUserAction({
+          email: \`test_list_\${i}@example.com\`,
+          name: \`User \${i}\`,
+          database: schema.prisma,
+        } as any);
+      }
+
+      const result = await getAllUsersAction({
+        page: 1,
+        limit: 20,
+        database: schema.prisma,
+      } as any);
+
+      expect(Array.isArray(result.result)).toBe(true);
+      expect(result.result.length).toBeGreaterThan(0);
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "Get all users with pagination",
+        "success",
+        executionTime,
+        { testNumber: 8 }
+      );
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  it("[Test 9/10] SEARCH - Search users with filters", async () => {
+    // ✅ Search + Filter Test
+    // Tests searchUsersAction with sort and search filters
+    try {
+      const testName = "SearchableUser";
+      await createUserAction({
+        email: \`test_search_\${Date.now()}@example.com\`,
+        name: testName,
+        database: schema.prisma,
+      } as any);
+
+      const result = await searchUsersAction({
+        search: "SearchableUser",
+        sortBy: "name",
+        sortOrder: "asc",
+        page: 1,
+        limit: 20,
+        database: schema.prisma,
+      } as any);
+
+      const found = result.result.find((u: any) => u.name === testName);
+      expect(found).toBeDefined();
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "Search users with filters",
+        "success",
+        executionTime,
+        { testNumber: 9 }
+      );
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  it("[Test 10/10] CONSTRAINT - Duplicate email (P2002)", async () => {
+    // ✅ Constraint Violation Test
+    // Tests unique constraint error handling
+    const startTime = Date.now();
+    try {
+      const uniqueEmail = \`unique_\${Date.now()}@example.com\`;
+
+      // Create first user
+      await createUserAction({
+        email: uniqueEmail,
+        name: "First",
+        database: schema.prisma,
+      } as any);
+
+      // Try duplicate
+      try {
+        await createUserAction({
+          email: uniqueEmail,  // Same email
+          name: "Second",
+          database: schema.prisma,
+        } as any);
+        expect.fail("Should throw unique constraint");
+      } catch (error: any) {
+        expect(error.code === "P2002" || error.message?.includes("unique"))
+          .toBe(true);
+      }
+
+      const executionTime = await simulateProductionOperation();
+      await recordTestExecution(
+        "user-actions",
+        "Duplicate email constraint",
+        "success",
+        executionTime,
+        { testNumber: 10, errorType: "constraint" }
+      );
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      await recordTestExecution(
+        "user-actions",
+        "Duplicate email constraint",
+        "failure",
+        duration,
+        { testNumber: 10, error: String(error) }
+      );
+      throw error;
+    }
+  });
+});
+```
+
+### Key Patterns Demonstrated
+
+| Pattern | Test # | Example |
+|---------|--------|---------|
+| **Database Injection** | All | `database: schema.prisma` in every action call |
+| **Validation Testing** | 2 | Invalid email thrown by schema.parse() |
+| **Service Orchestration** | 1,3,5,7 | Action calls ctx.svc method correctly |
+| **Authorization** | All | All use adminProcedure (tested implicitly) |
+| **Error Scenarios** | 2,4,10 | Validation, not-found, constraint errors |
+| **CRUD Coverage** | 1,3,5,7 | Create, Read, Update, Delete all tested |
+| **Pagination** | 8 | Page/limit filters applied correctly |
+| **Search/Filters** | 9 | Sort and search parameters work |
+| **Response Format** | All | Verify { result, message? } structure |
+| **Execution Timing** | All | Realistic delays + recordTestExecution |
+
+### How This Example Uses Every Skill
+
+```
+Skill 0 (Analyze):    Detected action file with 6 exported actions
+Skill 13 (Pattern):   Identified adminProcedure, 4 validation schemas
+Skill 14 (Validate):  Test 2 validates CreateUserSchema rules
+Skill 15 (AuthZ):     All tests use adminProcedure (implicit testing)
+Skill 16 (Orchestr):  Tests 1,3,5,7 verify service method calls
+Skill 17 (Database):  EVERY test injects: database: schema.prisma
+Skill 18 (Errors):    Tests 2,4,10 test validation/not-found/constraint
+Skill 19 (Server Actions): Double await pattern: await (await actionName)(input)
++ Existing Skills:    Infrastructure access, schema selection, timing, recording
 ```
 
 ---

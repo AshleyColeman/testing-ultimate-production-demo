@@ -32,7 +32,12 @@ export async function listUsersCommand() {
     const _userService = userService(serverCtx);
 
     // Get users
-    const result = await _userService.getAllUsers({ page, limit });
+    const result = await _userService.getAllUsers({ 
+      page, 
+      limit,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    });
 
     if (result.success && result.data) {
       logger.info(`📋 Users (Page ${result.pagination.page} of ${result.pagination.totalPages}):`);
