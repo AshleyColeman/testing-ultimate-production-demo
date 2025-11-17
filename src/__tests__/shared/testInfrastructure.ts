@@ -145,6 +145,10 @@ export async function initializeInfrastructure(): Promise<TestInfrastructure> {
     const containerResults = await Promise.all(containerPromises);
     containers.push(...containerResults);
 
+    // Give all containers a moment to fully stabilize
+    logger.info("⏳ Waiting for all containers to fully stabilize...");
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
     logger.info("🗄️ Creating schema infrastructure...");
     const schemas: SchemaConfig[] = [];
 
@@ -186,16 +190,22 @@ export async function initializeInfrastructure(): Promise<TestInfrastructure> {
             while (!connected && attempts < maxAttempts) {
               try {
                 await prisma.$connect();
+                // Verify connection works
+                await prisma.$queryRaw`SELECT 1`;
                 connected = true;
                 connectionCache.set(connectionUri, prisma);
               } catch (error) {
                 attempts++;
                 if (attempts >= maxAttempts) {
+                  logger.error(`❌ Failed to connect to ${service} after ${maxAttempts} attempts`);
+                  logger.error(`   Error: ${(error as Error).message}`);
                   throw new Error(
                     `Failed to connect after ${maxAttempts} attempts`
                   );
                 }
-                const waitTime = Math.min(1000 * Math.pow(2, attempts), 5000);
+                // Longer wait times with exponential backoff
+                const waitTime = Math.min(2000 * Math.pow(1.5, attempts), 8000);
+                logger.info(`   ⏳ Retry ${attempts}/${maxAttempts} in ${waitTime}ms...`);
                 await new Promise((resolve) => setTimeout(resolve, waitTime));
               }
             }

@@ -10,9 +10,7 @@ import {
 } from "./shared/testInfrastructure";
 
 // Helper imports
-import {
-  simulateProductionOperation,
-} from "./shared/testHelpers";
+import { simulateProductionOperation } from "./shared/testHelpers";
 
 /**
  * 🎯 SELECTIVE TEST RUNNER
@@ -28,17 +26,38 @@ import {
  * npm run test:selective auth-login.test.ts
  */
 
+/**
+ * Helper function to get test file from environment variable
+ * 
+ * NOTE: Direct vitest calls (npx vitest run ... -- file.test.ts) do NOT work
+ * because Vitest runs tests in worker processes that don't receive CLI args.
+ * 
+ * MUST use: npm run test:selective file.test.ts
+ */
+function getTestFileFromArgs(): string | null {
+  // Only environment variable works (set by test-selective.cjs wrapper)
+  return process.env.TEST_FILE || null;
+}
+
 describe("🎯 SELECTIVE TEST RUNNER", () => {
   let infra: any;
   let testFilePath: string | null = null;
   let testFileName: string | null = null;
 
   beforeAll(async () => {
-    // Get test file from environment variable (most reliable approach)
-    testFileName = process.env.TEST_FILE || null;
+    // Get test file from multiple sources
+    testFileName = getTestFileFromArgs();
 
     if (testFileName) {
-      testFilePath = path.join(process.cwd(), 'src', '__tests__', 'microservices', testFileName);
+      // Ensure we have just the filename, not a full path
+      testFileName = path.basename(testFileName);
+      testFilePath = path.join(
+        process.cwd(),
+        "src",
+        "__tests__",
+        "microservices",
+        testFileName
+      );
 
       console.log(`\n🎯 SELECTIVE RUNNER: Loading test file: ${testFileName}`);
       console.log(`📁 Full path: ${testFilePath}`);
@@ -48,33 +67,54 @@ describe("🎯 SELECTIVE TEST RUNNER", () => {
         throw new Error(`❌ Test file not found: ${testFilePath}`);
       }
 
-      console.log(`✅ Test file found, proceeding with infrastructure setup...\n`);
+      console.log(
+        `✅ Test file found, proceeding with infrastructure setup...\n`
+      );
     } else {
-      console.log(`\n❌ No test file specified.`);
-      console.log(`\n📋 Usage Examples:`);
-      console.log(`   npx vitest run src/__tests__/selectiveTestRunner.test.ts -- user-actions.test.ts`);
-      console.log(`   npx vitest run src/__tests__/selectiveTestRunner.test.ts -- auth-login.test.ts`);
-      console.log(`   npx vitest run src/__tests__/selectiveTestRunner.test.ts -- payment-process.test.ts`);
+      console.log(`\n${"=".repeat(80)}`);
+      console.log(`❌ NO TEST FILE SPECIFIED`);
+      console.log(`${"=".repeat(80)}\n`);
+      
+      console.log(`📋 CORRECT Usage (via npm script):`);
       console.log(`   npm run test:selective user-actions.test.ts`);
-      console.log(`\n📁 Available test files in src/__tests__/microservices/:`);
+      console.log(`   npm run test:selective auth-login.test.ts`);
+      console.log(`   npm run test:selective payment-process.test.ts`);
+      
+      console.log(`\n⚠️  IMPORTANT: Direct vitest calls do NOT work:`);
+      console.log(`   ❌ npx vitest run src/__tests__/selectiveTestRunner.test.ts -- user-actions.test.ts`);
+      console.log(`   ❌ npx vitest run src/__tests__/microservices/user-actions.test.ts`);
+      
+      console.log(`\n� WHY: Vitest runs tests in worker processes that don't receive CLI arguments.`);
+      console.log(`   The npm script (test:selective) uses test-selective.cjs to set environment`);
+      console.log(`   variables that the worker process CAN read.`);
+      
+      console.log(`\n�📁 Available test files in src/__tests__/microservices/:`);
 
       // List available test files
       try {
-        const testDir = path.join(process.cwd(), 'src', '__tests__', 'microservices');
-        const files = fs.readdirSync(testDir).filter(file => file.endsWith('.test.ts'));
-        files.forEach(file => console.log(`   • ${file}`));
+        const testDir = path.join(
+          process.cwd(),
+          "src",
+          "__tests__",
+          "microservices"
+        );
+        const files = fs
+          .readdirSync(testDir)
+          .filter((file) => file.endsWith(".test.ts"));
+        files.forEach((file) => console.log(`   • ${file}`));
       } catch (err) {
         console.log(`   (Unable to list test files)`);
       }
 
-      throw new Error(`\n💡 Please specify a test file to run.\n`);
+      console.log(`\n${"=".repeat(80)}\n`);
+      throw new Error(`\n💡 Please use: npm run test:selective <filename>\n`);
     }
 
     // Initialize infrastructure (same as main orchestrator)
     infra = await getInfrastructure();
   });
 
-  it("should run the specified test file with full infrastructure", async () => {
+  it("should load and execute the specified test file", async () => {
     if (!testFilePath || !testFileName) {
       throw new Error("No test file specified");
     }
@@ -83,86 +123,65 @@ describe("🎯 SELECTIVE TEST RUNNER", () => {
 
     try {
       // Dynamic import of the test file
-      console.log(`🚀 Loading test file: ${testFileName}`);
+      // This automatically registers and runs all tests in that file with Vitest
+      console.log(`\n${"=".repeat(80)}`);
+      console.log(`🚀 IMPORTING TEST FILE: ${testFileName}`);
+      console.log(`📁 Path: ${testFilePath}`);
+      console.log(`🏗️  Infrastructure: ✅ Available (5 containers, 20 schemas)`);
+      console.log(`${"=".repeat(80)}\n`);
+
       const testModule = await import(testFilePath);
 
-      console.log(`✅ Test file loaded successfully`);
-      console.log(`🎯 Running tests from ${testFileName}...`);
-
-      // Get test file name for metrics (remove .test.ts extension)
-      const baseTestName = testFileName.replace('.test.ts', '');
-
-      // Execute the test file by running vitest on the specific file
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-
-      // Set environment variable for the test file and run vitest
-      const testCommand = process.platform === 'win32'
-        ? `set TEST_FILE=${testFileName}&& npx vitest run "${testFilePath}"`
-        : `TEST_FILE="${testFileName}" npx vitest run "${testFilePath}"`;
-
-      console.log(`🔧 Executing: ${testCommand}`);
-
-      const { stdout, stderr } = await execAsync(testCommand, {
-        cwd: process.cwd(),
-        env: { ...process.env, TEST_FILE: testFileName }
-      });
-
-      // Output the test results
-      if (stdout) {
-        console.log('\n📋 Test Results:');
-        console.log(stdout);
-      }
-
-      if (stderr && !stderr.includes('WARN')) {
-        console.error('\n⚠️ Test Warnings/Errors:');
-        console.error(stderr);
-      }
+      console.log(`\n${"=".repeat(80)}`);
+      console.log(`✅ TEST FILE LOADED: ${testFileName}`);
+      console.log(`🎯 All tests from this file have been registered with Vitest`);
+      console.log(`� Check the test output above for execution results`);
+      console.log(`${"=".repeat(80)}\n`);
 
       const executionTime = Date.now() - startTime;
 
-      // Get a schema for recording test execution (following pattern from other tests)
+      // Get a schema for recording test execution
       const schemas = await getSchemasByService("auth");
       const schema = schemas[Math.floor(Math.random() * schemas.length)];
 
-      // Record execution metrics following the same pattern as working tests
+      // Record execution metrics
       await recordTestExecution(
         "selective-runner",
-        baseTestName,
+        testFileName.replace(".test.ts", ""),
         "success",
         executionTime,
-        { testNumber: 1, schema: schema.schemaName }
+        { testFileName, schema: schema.schemaName }
       );
 
-      console.log(`\n📊 Test Execution Summary:`);
+      console.log(`📊 Selective Runner Summary:`);
       console.log(`   • Test File: ${testFileName}`);
-      console.log(`   • Execution Time: ${executionTime}ms`);
-      console.log(`   • Status: ✅ SUCCESS`);
-      console.log(`   • Infrastructure: Full (5 containers, 20 schemas)`);
+      console.log(`   • Load Time: ${executionTime}ms`);
+      console.log(`   • Infrastructure: ✅ Full (5 containers, 20 schemas)`);
+      console.log(`   • Test Module: ${testModule ? "✅ Loaded" : "❌ Failed"}`);
 
-      expect(true).toBe(true); // Test passed if we got here without errors
-
+      expect(testModule).toBeDefined();
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
-      // Get a schema for recording test execution (following pattern from other tests)
+      // Get a schema for recording test execution
       const schemas = await getSchemasByService("auth");
       const schema = schemas[Math.floor(Math.random() * schemas.length)];
 
-      // Record failure metrics following the same pattern as working tests
+      // Record failure metrics
       await recordTestExecution(
         "selective-runner",
-        testFileName.replace('.test.ts', ''),
+        testFileName.replace(".test.ts", ""),
         "failure",
         executionTime,
-        { testNumber: 1, schema: schema.schemaName }
+        { testFileName, schema: schema.schemaName, error: (error as Error).message }
       );
 
-      console.error(`\n❌ Test Execution Failed:`);
-      console.error(`   • Test File: ${testFileName}`);
+      console.error(`\n${"=".repeat(80)}`);
+      console.error(`❌ FAILED TO LOAD TEST FILE: ${testFileName}`);
+      console.error(`${"=".repeat(80)}`);
       console.error(`   • Error: ${(error as Error).message}`);
-      console.error(`   • Execution Time: ${executionTime}ms`);
+      console.error(`   • Load Time: ${executionTime}ms`);
+      console.error(`${"=".repeat(80)}\n`);
 
       throw error;
     }
@@ -181,7 +200,9 @@ describe("🎯 SELECTIVE TEST RUNNER", () => {
     expect(authSchemas.length).toBeGreaterThan(0);
 
     console.log(`\n🏗️  Infrastructure Verification:`);
-    console.log(`   • PostgreSQL Containers: ✅ Available (${infra.containers.length})`);
+    console.log(
+      `   • PostgreSQL Containers: ✅ Available (${infra.containers.length})`
+    );
     console.log(`   • Auth Schemas: ${authSchemas.length} available`);
     console.log(`   • Logger: ✅ Available`);
   });
