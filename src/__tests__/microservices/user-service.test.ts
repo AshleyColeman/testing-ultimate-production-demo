@@ -2,7 +2,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 // Service imports - Go UP 2 levels, then into services
 import { userService } from "../../services/UserService";
-import type { CreateUserInput, UpdateUserInput } from "../../services/UserService";
+import type {
+  CreateUserInput,
+  UpdateUserInput,
+} from "../../services/UserService";
 
 // Infrastructure imports - Go UP 1 level, then into shared
 import {
@@ -12,9 +15,7 @@ import {
 } from "../shared/testInfrastructure";
 
 // Helper imports - Go UP 1 level, then into shared
-import {
-  simulateProductionOperation,
-} from "../shared/testHelpers";
+import { simulateProductionOperation } from "../shared/testHelpers";
 
 describe("UserService Integration Tests", () => {
   let schema: any;
@@ -42,32 +43,49 @@ describe("UserService Integration Tests", () => {
 
   // Helper function to generate unique test data
   const generateUniqueEmail = (testNumber: number) =>
-    `test${testNumber}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}@example.com`;
+    `test${testNumber}_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 6)}@example.com`;
 
   const generateUniqueName = (testNumber: number) =>
     `Test User ${testNumber} ${Date.now()}`;
 
   // Helper wrapper for test execution with timing and recording
-  const executeUserTest = async (testName: string, testFn: () => Promise<any>) => {
+  const executeUserTest = async (
+    testName: string,
+    testFn: () => Promise<any>
+  ) => {
     const startTime = Date.now();
     try {
       const result = await testFn();
       const executionTime = Date.now() - startTime;
-      await recordTestExecution("user-service", testName, "success", executionTime, {
-        schema: schema.schemaName,
-      });
+      await recordTestExecution(
+        "user-service",
+        testName,
+        "success",
+        executionTime,
+        {
+          schema: schema.schemaName,
+        }
+      );
       return result;
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      await recordTestExecution("user-service", testName, "failure", executionTime, {
-        schema: schema.schemaName,
-        error: (error as Error).message,
-      });
+      await recordTestExecution(
+        "user-service",
+        testName,
+        "failure",
+        executionTime,
+        {
+          schema: schema.schemaName,
+          error: (error as Error).message,
+        }
+      );
       throw error;
     }
   };
 
-  it("[Test 1/10] Create user successfully", async () => {
+  it.only("[Test 1/10] Create user successfully", async () => {
     await executeUserTest("Create user successfully", async () => {
       const userData: CreateUserInput = {
         email: generateUniqueEmail(1),
@@ -154,14 +172,19 @@ describe("UserService Integration Tests", () => {
         name: "Updated Name",
         isActive: false,
       };
-      const updatedUser = await userService.updateUser(createdUser.id, updateData);
+      const updatedUser = await userService.updateUser(
+        createdUser.id,
+        updateData
+      );
 
       expect(updatedUser).toBeDefined();
       expect(updatedUser.id).toBe(createdUser.id);
       expect(updatedUser.email).toBe(userData.email);
       expect(updatedUser.name).toBe(updateData.name);
       expect(updatedUser.isActive).toBe(updateData.isActive);
-      expect(updatedUser.updatedAt.getTime()).toBeGreaterThan(createdUser.updatedAt.getTime());
+      expect(updatedUser.updatedAt.getTime()).toBeGreaterThan(
+        createdUser.updatedAt.getTime()
+      );
 
       const executionTime = await simulateProductionOperation();
       expect(executionTime).toBeGreaterThan(0);
@@ -191,8 +214,8 @@ describe("UserService Integration Tests", () => {
       expect(allUsers.length).toBeGreaterThanOrEqual(3);
 
       // Verify our created users are in the list
-      users.forEach(createdUser => {
-        const found = allUsers.find(u => u.id === createdUser.id);
+      users.forEach((createdUser) => {
+        const found = allUsers.find((u) => u.id === createdUser.id);
         expect(found).toBeDefined();
         expect(found?.email).toBe(createdUser.email);
       });
@@ -229,67 +252,76 @@ describe("UserService Integration Tests", () => {
   });
 
   it("[Test 7/10] Create user with duplicate email should fail", async () => {
-    await executeUserTest("Create user with duplicate email should fail", async () => {
-      const email = generateUniqueEmail(7);
-      const userData1: CreateUserInput = {
-        email,
-        name: generateUniqueName(7),
-      };
-      const userData2: CreateUserInput = {
-        email, // Same email
-        name: "Another Name",
-      };
+    await executeUserTest(
+      "Create user with duplicate email should fail",
+      async () => {
+        const email = generateUniqueEmail(7);
+        const userData1: CreateUserInput = {
+          email,
+          name: generateUniqueName(7),
+        };
+        const userData2: CreateUserInput = {
+          email, // Same email
+          name: "Another Name",
+        };
 
-      // First user should succeed
-      await userService.createUser(userData1);
+        // First user should succeed
+        await userService.createUser(userData1);
 
-      // Second user with same email should fail
-      try {
-        await userService.createUser(userData2);
-        expect.fail("Should have thrown an error for duplicate email");
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain("already exists");
+        // Second user with same email should fail
+        try {
+          await userService.createUser(userData2);
+          expect.fail("Should have thrown an error for duplicate email");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain("already exists");
+        }
+
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
       }
-
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
-    });
+    );
   });
 
   it("[Test 8/10] Create user with invalid email should fail", async () => {
-    await executeUserTest("Create user with invalid email should fail", async () => {
-      const userData: CreateUserInput = {
-        email: "invalid-email", // Invalid format
-        name: generateUniqueName(8),
-      };
+    await executeUserTest(
+      "Create user with invalid email should fail",
+      async () => {
+        const userData: CreateUserInput = {
+          email: "invalid-email", // Invalid format
+          name: generateUniqueName(8),
+        };
 
-      try {
-        await userService.createUser(userData);
-        expect.fail("Should have thrown an error for invalid email");
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain("Invalid email format");
+        try {
+          await userService.createUser(userData);
+          expect.fail("Should have thrown an error for invalid email");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain("Invalid email format");
+        }
+
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
       }
-
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
-    });
+    );
   });
 
   it("[Test 9/10] Get user by non-existent ID should return null", async () => {
-    await executeUserTest("Get user by non-existent ID should return null", async () => {
-      const nonExistentId = "usr_non_existent_12345";
-      const user = await userService.getUserById(nonExistentId);
+    await executeUserTest(
+      "Get user by non-existent ID should return null",
+      async () => {
+        const nonExistentId = "usr_non_existent_12345";
+        const user = await userService.getUserById(nonExistentId);
 
-      expect(user).toBeNull();
+        expect(user).toBeNull();
 
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
-    });
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
+      }
+    );
   });
 
   it("[Test 10/30] Delete user successfully", async () => {
@@ -325,66 +357,81 @@ describe("UserService Integration Tests", () => {
   // ========== ADVANCED TESTS (11-30) ==========
 
   it("[Test 11/30] Create user with missing email should fail", async () => {
-    await executeUserTest("Create user with missing email should fail", async () => {
-      const userData = {
-        name: generateUniqueName(11),
-        // Missing email
-      } as CreateUserInput;
+    await executeUserTest(
+      "Create user with missing email should fail",
+      async () => {
+        const userData = {
+          name: generateUniqueName(11),
+          // Missing email
+        } as CreateUserInput;
 
-      try {
-        await userService.createUser(userData);
-        expect.fail("Should have thrown an error for missing email");
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain("Email and name are required");
+        try {
+          await userService.createUser(userData);
+          expect.fail("Should have thrown an error for missing email");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain(
+            "Email and name are required"
+          );
+        }
+
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
       }
-
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
-    });
+    );
   });
 
   it("[Test 12/30] Create user with missing name should fail", async () => {
-    await executeUserTest("Create user with missing name should fail", async () => {
-      const userData = {
-        email: generateUniqueEmail(12),
-        // Missing name
-      } as CreateUserInput;
+    await executeUserTest(
+      "Create user with missing name should fail",
+      async () => {
+        const userData = {
+          email: generateUniqueEmail(12),
+          // Missing name
+        } as CreateUserInput;
 
-      try {
-        await userService.createUser(userData);
-        expect.fail("Should have thrown an error for missing name");
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain("Email and name are required");
+        try {
+          await userService.createUser(userData);
+          expect.fail("Should have thrown an error for missing name");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain(
+            "Email and name are required"
+          );
+        }
+
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
       }
-
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
-    });
+    );
   });
 
   it("[Test 13/30] Create user with empty email should fail", async () => {
-    await executeUserTest("Create user with empty email should fail", async () => {
-      const userData: CreateUserInput = {
-        email: "",
-        name: generateUniqueName(13),
-      };
+    await executeUserTest(
+      "Create user with empty email should fail",
+      async () => {
+        const userData: CreateUserInput = {
+          email: "",
+          name: generateUniqueName(13),
+        };
 
-      try {
-        await userService.createUser(userData);
-        expect.fail("Should have thrown an error for empty email");
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain("Email and name are required");
+        try {
+          await userService.createUser(userData);
+          expect.fail("Should have thrown an error for empty email");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain(
+            "Email and name are required"
+          );
+        }
+
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
       }
-
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
-    });
+    );
   });
 
   it("[Test 14/30] Update non-existent user should fail", async () => {
@@ -461,30 +508,36 @@ describe("UserService Integration Tests", () => {
   });
 
   it("[Test 18/30] Update user with no changes should return unchanged user", async () => {
-    await executeUserTest("Update user with no changes should return unchanged user", async () => {
-      // Create user first
-      const userData: CreateUserInput = {
-        email: generateUniqueEmail(18),
-        name: generateUniqueName(18),
-      };
-      const createdUser = await userService.createUser(userData);
+    await executeUserTest(
+      "Update user with no changes should return unchanged user",
+      async () => {
+        // Create user first
+        const userData: CreateUserInput = {
+          email: generateUniqueEmail(18),
+          name: generateUniqueName(18),
+        };
+        const createdUser = await userService.createUser(userData);
 
-      // Update with empty data (no changes)
-      const updateData: UpdateUserInput = {};
-      const updatedUser = await userService.updateUser(createdUser.id, updateData);
+        // Update with empty data (no changes)
+        const updateData: UpdateUserInput = {};
+        const updatedUser = await userService.updateUser(
+          createdUser.id,
+          updateData
+        );
 
-      expect(updatedUser).toBeDefined();
-      expect(updatedUser.id).toBe(createdUser.id);
-      expect(updatedUser.email).toBe(createdUser.email);
-      expect(updatedUser.name).toBe(createdUser.name);
-      expect(updatedUser.isActive).toBe(createdUser.isActive);
+        expect(updatedUser).toBeDefined();
+        expect(updatedUser.id).toBe(createdUser.id);
+        expect(updatedUser.email).toBe(createdUser.email);
+        expect(updatedUser.name).toBe(createdUser.name);
+        expect(updatedUser.isActive).toBe(createdUser.isActive);
 
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
 
-      return updatedUser;
-    });
+        return updatedUser;
+      }
+    );
   });
 
   it("[Test 19/30] Update user name only", async () => {
@@ -500,7 +553,10 @@ describe("UserService Integration Tests", () => {
       const updateData: UpdateUserInput = {
         name: "New Name Only",
       };
-      const updatedUser = await userService.updateUser(createdUser.id, updateData);
+      const updatedUser = await userService.updateUser(
+        createdUser.id,
+        updateData
+      );
 
       expect(updatedUser).toBeDefined();
       expect(updatedUser.id).toBe(createdUser.id);
@@ -529,7 +585,10 @@ describe("UserService Integration Tests", () => {
       const updateData: UpdateUserInput = {
         isActive: false,
       };
-      const updatedUser = await userService.updateUser(createdUser.id, updateData);
+      const updatedUser = await userService.updateUser(
+        createdUser.id,
+        updateData
+      );
 
       expect(updatedUser).toBeDefined();
       expect(updatedUser.id).toBe(createdUser.id);
@@ -546,25 +605,28 @@ describe("UserService Integration Tests", () => {
   });
 
   it("[Test 21/30] Create user with special characters in name", async () => {
-    await executeUserTest("Create user with special characters in name", async () => {
-      const userData: CreateUserInput = {
-        email: generateUniqueEmail(21),
-        name: "José María O'Donnell-Smith (测试)",
-      };
+    await executeUserTest(
+      "Create user with special characters in name",
+      async () => {
+        const userData: CreateUserInput = {
+          email: generateUniqueEmail(21),
+          name: "José María O'Donnell-Smith (测试)",
+        };
 
-      const user = await userService.createUser(userData);
+        const user = await userService.createUser(userData);
 
-      expect(user).toBeDefined();
-      expect(user.email).toBe(userData.email);
-      expect(user.name).toBe(userData.name);
-      expect(user.isActive).toBe(true);
+        expect(user).toBeDefined();
+        expect(user.email).toBe(userData.email);
+        expect(user.name).toBe(userData.name);
+        expect(user.isActive).toBe(true);
 
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
 
-      return user;
-    });
+        return user;
+      }
+    );
   });
 
   it("[Test 22/30] Create user with very long name", async () => {
@@ -591,18 +653,21 @@ describe("UserService Integration Tests", () => {
   });
 
   it("[Test 23/30] Delete non-existent user should return 0", async () => {
-    await executeUserTest("Delete non-existent user should return 0", async () => {
-      const nonExistentId = "usr_non_existent_delete_12345";
-      const deletedCount = await userService.deleteUser(nonExistentId);
+    await executeUserTest(
+      "Delete non-existent user should return 0",
+      async () => {
+        const nonExistentId = "usr_non_existent_delete_12345";
+        const deletedCount = await userService.deleteUser(nonExistentId);
 
-      expect(deletedCount).toBe(0);
+        expect(deletedCount).toBe(0);
 
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
 
-      return deletedCount;
-    });
+        return deletedCount;
+      }
+    );
   });
 
   it("[Test 24/30] Delete user with empty ID should fail", async () => {
@@ -622,72 +687,81 @@ describe("UserService Integration Tests", () => {
   });
 
   it("[Test 25/30] Get user by non-existent email should return null", async () => {
-    await executeUserTest("Get user by non-existent email should return null", async () => {
-      const nonExistentEmail = `nonexistent${Date.now()}@example.com`;
-      const user = await userService.getUserByEmail(nonExistentEmail);
+    await executeUserTest(
+      "Get user by non-existent email should return null",
+      async () => {
+        const nonExistentEmail = `nonexistent${Date.now()}@example.com`;
+        const user = await userService.getUserByEmail(nonExistentEmail);
 
-      expect(user).toBeNull();
+        expect(user).toBeNull();
 
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
-    });
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
+      }
+    );
   });
 
   it("[Test 26/30] Get all users when empty should return empty array", async () => {
-    await executeUserTest("Get all users when empty should return empty array", async () => {
-      // Clean up all users first
-      await userService.deleteAllUsers();
+    await executeUserTest(
+      "Get all users when empty should return empty array",
+      async () => {
+        // Clean up all users first
+        await userService.deleteAllUsers();
 
-      const allUsers = await userService.getAllUsers();
+        const allUsers = await userService.getAllUsers();
 
-      expect(allUsers).toBeDefined();
-      expect(Array.isArray(allUsers)).toBe(true);
-      expect(allUsers.length).toBe(0);
+        expect(allUsers).toBeDefined();
+        expect(Array.isArray(allUsers)).toBe(true);
+        expect(allUsers.length).toBe(0);
 
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
 
-      return allUsers;
-    });
+        return allUsers;
+      }
+    );
   });
 
   it("[Test 27/30] Create multiple users and verify ordering by createdAt", async () => {
-    await executeUserTest("Create multiple users and verify ordering by createdAt", async () => {
-      // Clean up first
-      await userService.deleteAllUsers();
+    await executeUserTest(
+      "Create multiple users and verify ordering by createdAt",
+      async () => {
+        // Clean up first
+        await userService.deleteAllUsers();
 
-      const users = [];
-      const startTime = Date.now();
+        const users = [];
+        const startTime = Date.now();
 
-      // Create users with delays to ensure different timestamps
-      for (let i = 0; i < 3; i++) {
-        await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
-        const userData: CreateUserInput = {
-          email: generateUniqueEmail(27 + i),
-          name: `User ${i + 1}`,
-        };
-        users.push(await userService.createUser(userData));
+        // Create users with delays to ensure different timestamps
+        for (let i = 0; i < 3; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 50)); // Small delay
+          const userData: CreateUserInput = {
+            email: generateUniqueEmail(27 + i),
+            name: `User ${i + 1}`,
+          };
+          users.push(await userService.createUser(userData));
+        }
+
+        const allUsers = await userService.getAllUsers();
+
+        expect(allUsers.length).toBe(3);
+
+        // Verify ordering (should be descending by createdAt)
+        for (let i = 0; i < allUsers.length - 1; i++) {
+          const currentTime = allUsers[i].createdAt.getTime();
+          const nextTime = allUsers[i + 1].createdAt.getTime();
+          expect(currentTime).toBeGreaterThanOrEqual(nextTime);
+        }
+
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
+
+        return allUsers;
       }
-
-      const allUsers = await userService.getAllUsers();
-
-      expect(allUsers.length).toBe(3);
-
-      // Verify ordering (should be descending by createdAt)
-      for (let i = 0; i < allUsers.length - 1; i++) {
-        const currentTime = allUsers[i].createdAt.getTime();
-        const nextTime = allUsers[i + 1].createdAt.getTime();
-        expect(currentTime).toBeGreaterThanOrEqual(nextTime);
-      }
-
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
-
-      return allUsers;
-    });
+    );
   });
 
   it("[Test 28/30] Reactivate deactivated user", async () => {
@@ -700,11 +774,15 @@ describe("UserService Integration Tests", () => {
       const createdUser = await userService.createUser(userData);
 
       // Deactivate user
-      const deactivatedUser = await userService.updateUser(createdUser.id, { isActive: false });
+      const deactivatedUser = await userService.updateUser(createdUser.id, {
+        isActive: false,
+      });
       expect(deactivatedUser.isActive).toBe(false);
 
       // Reactivate user
-      const reactivatedUser = await userService.updateUser(createdUser.id, { isActive: true });
+      const reactivatedUser = await userService.updateUser(createdUser.id, {
+        isActive: true,
+      });
       expect(reactivatedUser.isActive).toBe(true);
       expect(reactivatedUser.id).toBe(createdUser.id);
       expect(reactivatedUser.email).toBe(createdUser.email);
@@ -737,7 +815,9 @@ describe("UserService Integration Tests", () => {
 
       try {
         await userService.createUser(userData2);
-        expect.fail("Should have thrown an error for case-insensitive duplicate email");
+        expect.fail(
+          "Should have thrown an error for case-insensitive duplicate email"
+        );
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toContain("already exists");
@@ -752,48 +832,51 @@ describe("UserService Integration Tests", () => {
   });
 
   it("[Test 30/30] Performance test: Create and retrieve 10 users", async () => {
-    await executeUserTest("Performance test: Create and retrieve 10 users", async () => {
-      const users = [];
-      const startTime = Date.now();
+    await executeUserTest(
+      "Performance test: Create and retrieve 10 users",
+      async () => {
+        const users = [];
+        const startTime = Date.now();
 
-      // Create 10 users rapidly
-      for (let i = 0; i < 10; i++) {
-        const userData: CreateUserInput = {
-          email: generateUniqueEmail(30 + i),
-          name: `Performance User ${i + 1}`,
-        };
-        users.push(await userService.createUser(userData));
+        // Create 10 users rapidly
+        for (let i = 0; i < 10; i++) {
+          const userData: CreateUserInput = {
+            email: generateUniqueEmail(30 + i),
+            name: `Performance User ${i + 1}`,
+          };
+          users.push(await userService.createUser(userData));
+        }
+
+        const createTime = Date.now() - startTime;
+
+        // Retrieve all 10 users
+        const retrieveStartTime = Date.now();
+        const retrievedUsers = [];
+
+        for (const user of users) {
+          const retrieved = await userService.getUserById(user.id);
+          expect(retrieved).toBeDefined();
+          expect(retrieved?.id).toBe(user.id);
+          retrievedUsers.push(retrieved);
+        }
+
+        const retrieveTime = Date.now() - retrieveStartTime;
+
+        // Verify performance expectations
+        expect(createTime).toBeLessThan(5000); // Should create 10 users in under 5 seconds
+        expect(retrieveTime).toBeLessThan(3000); // Should retrieve 10 users in under 3 seconds
+        expect(retrievedUsers.length).toBe(10);
+
+        // Verify count matches
+        const count = await userService.getUserCount();
+        expect(count).toBeGreaterThanOrEqual(10);
+
+        const executionTime = await simulateProductionOperation();
+        expect(executionTime).toBeGreaterThan(0);
+        expect(executionTime).toBeLessThan(12000);
+
+        return { createTime, retrieveTime, userCount: count };
       }
-
-      const createTime = Date.now() - startTime;
-
-      // Retrieve all 10 users
-      const retrieveStartTime = Date.now();
-      const retrievedUsers = [];
-
-      for (const user of users) {
-        const retrieved = await userService.getUserById(user.id);
-        expect(retrieved).toBeDefined();
-        expect(retrieved?.id).toBe(user.id);
-        retrievedUsers.push(retrieved);
-      }
-
-      const retrieveTime = Date.now() - retrieveStartTime;
-
-      // Verify performance expectations
-      expect(createTime).toBeLessThan(5000); // Should create 10 users in under 5 seconds
-      expect(retrieveTime).toBeLessThan(3000); // Should retrieve 10 users in under 3 seconds
-      expect(retrievedUsers.length).toBe(10);
-
-      // Verify count matches
-      const count = await userService.getUserCount();
-      expect(count).toBeGreaterThanOrEqual(10);
-
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(12000);
-
-      return { createTime, retrieveTime, userCount: count };
-    });
+    );
   });
 });

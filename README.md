@@ -9,6 +9,7 @@ A production-ready testing system that showcases:
 - ✅ **ONE file** orchestrates everything (`ultimateProductionDemo.test.ts`)
 - ✅ **53 test files** dynamically discovered and loaded
 - ✅ **530 tests** total (520 execute + 10 intentional failures)
+- ✅ **🗄️ Real database CRUD demo** - Actual PostgreSQL operations (not mocks!)
 - ✅ **5 shared PostgreSQL containers**
 - ✅ **20 isolated database schemas**
 - ✅ **Resilient error handling** - continues despite failures
@@ -66,7 +67,62 @@ That's it! The orchestrator handles:
 - Executing 530 tests
 - Cleaning up everything
 
-### Option 2: 🆕 Selective Test Runner (NEW!)
+### Option 2: 🗄️ Database CRUD Operations Demo (IMPORTANT!)
+
+**See REAL database operations** - This is NOT a mock test!
+
+```bash
+npx vitest run src/__tests__/databaseCRUDOperations.test.ts
+```
+
+**What it demonstrates:**
+
+- ✅ **Real PostgreSQL operations** - Actual INSERT, SELECT, UPDATE, DELETE
+- ✅ **Data verification** - Proves data persists and changes correctly
+- ✅ **Full CRUD lifecycle** - Complete database interaction workflow
+- ✅ **Transaction patterns** - Batch operations and complex queries
+- ✅ **Detailed logging** - Creates `logs/database-crud-demo.log` with step-by-step execution
+- ✅ **6 comprehensive tests** - Covering all CRUD operations + batch + transactions
+
+**Test Coverage:**
+
+1. ✅ **CREATE (INSERT)** - Add new records to PostgreSQL
+2. ✅ **READ (SELECT)** - Query and retrieve data
+3. ✅ **UPDATE** - Modify existing records
+4. ✅ **DELETE** - Remove records
+5. ✅ **BATCH INSERT** - Multiple records in one operation
+6. ✅ **COMPLEX QUERY** - JOINs, aggregations, filtering
+
+**Why This Matters:**
+
+- 🎯 **Proof of concept** - Shows tests can interact with real databases
+- 🎯 **Real state changes** - Unlike the 530+ mock tests, this changes actual data
+- 🎯 **Production patterns** - Demonstrates enterprise database testing
+- 🎯 **Learning tool** - See exactly how database operations work
+
+**Expected Output:**
+
+```
+✓ src/__tests__/databaseCRUDOperations.test.ts (6)
+  ✓ should INSERT a new user record into the database
+  ✓ should UPDATE an existing record in the database
+  ✓ should DELETE a record from the database
+  ✓ should READ (SELECT) records with filtering
+  ✓ should perform BATCH INSERT operations
+  ✓ should execute COMPLEX QUERIES with aggregations
+
+Test Files  1 passed (1)
+     Tests  6 passed (6)
+   Duration  8-12s
+
+📄 Detailed log: logs/database-crud-demo.log
+```
+
+**Pro Tip:** Check the log file to see every SQL operation executed!
+
+---
+
+### Option 3: 🆕 Selective Test Runner
 
 Run individual test files with full infrastructure support:
 
@@ -79,6 +135,7 @@ npx vitest run src/__tests__/selectiveTestRunner.test.ts -- auth-login.test.ts
 ```
 
 **What it does:**
+
 - ✅ Creates full infrastructure (5 containers, 20 schemas)
 - ✅ Loads only your specified test file
 - ✅ Provides same environment as full suite
@@ -86,6 +143,7 @@ npx vitest run src/__tests__/selectiveTestRunner.test.ts -- auth-login.test.ts
 - ✅ Much faster than running all 530+ tests
 
 **Examples:**
+
 ```bash
 npm run test:selective user-actions.test.ts
 npm run test:selective auth-login.test.ts
@@ -94,6 +152,7 @@ npm run test:selective inventory-stock.test.ts
 ```
 
 **When to use:**
+
 - 🛠️ **Development**: Test specific functionality quickly
 - 🐛 **Debugging**: Isolate failing tests
 - 🚀 **CI/CD**: Run targeted tests in PR pipelines
@@ -170,6 +229,7 @@ Test Files  1 passed (1)
 
 - 📝 **[DEMO_READY.md](./docs/DEMO_READY.md)** - Complete summary and getting started guide
 - 📋 **[QUICK_REFERENCE.md](./docs/QUICK_REFERENCE.md)** - Cheat sheet for commands and metrics
+- 🗄️ **[DATABASE_CRUD_DEMO.md](./docs/DATABASE_CRUD_DEMO.md)** - Real database operations guide
 
 ### Technical Documentation
 
@@ -312,15 +372,18 @@ See [LOG_GUIDE.md](./docs/LOG_GUIDE.md) for complete guide.
 
 ---
 
-## �� Project Structure
+## 📊 Project Structure
 
 ```
 src/__tests__/
 ├── ultimateProductionDemo.test.ts    ← Master Orchestrator (START HERE)
+├── databaseCRUDOperations.test.ts    ← 🗄️ REAL Database Demo (6 CRUD tests)
+├── selectiveTestRunner.test.ts       ← 🆕 Run individual files
 ├── shared/
 │   ├── testInfrastructure.ts         ← Infrastructure singleton
 │   └── testHelpers.ts                ← Helper utilities
 └── microservices/
+    ├── user-actions.test.ts          ← 🆕 Next.js Server Actions (10 tests)
     ├── auth-*.test.ts                ← 10 files, 100 tests
     ├── payment-*.test.ts             ← 10 files, 100 tests
     ├── inventory-*.test.ts           ← 10 files, 100 tests
@@ -406,6 +469,7 @@ npm run test:selective user-actions.test.ts
 **Q: What happens if I run the selective runner without arguments?**
 
 The runner will show you:
+
 - Clear error message explaining what's missing
 - Usage examples for correct syntax
 - List of available test files you can run
@@ -424,6 +488,23 @@ npm run test:selective -- broken-test-demo.test.ts
 npm run test:selective -- payment-validation-errors.test.ts
 ```
 
+**Q: How do I see REAL database operations (not mocks)?**
+
+```bash
+# Run the database CRUD demo - shows actual INSERT, UPDATE, DELETE operations
+npx vitest run src/__tests__/databaseCRUDOperations.test.ts
+
+# Check the detailed log afterward
+cat logs/database-crud-demo.log  # Linux/Mac
+type logs\database-crud-demo.log  # Windows
+```
+
+**Q: What's the difference between the 530 tests and the CRUD demo?**
+
+- **530 Tests**: Mock data, fast execution, demonstrate architecture patterns
+- **CRUD Demo**: Real PostgreSQL operations, actual data changes, proof database works
+- **Use Case**: CRUD demo proves the infrastructure can handle real workloads
+
 ---
 
 ## 🎉 Summary
@@ -431,6 +512,7 @@ npm run test:selective -- payment-validation-errors.test.ts
 This demo showcases:
 
 - ✅ **530+ tests** running from **ONE command**
+- ✅ **🗄️ Real database CRUD operations** - Not mocks, actual PostgreSQL!
 - ✅ **🆕 Selective testing** with full infrastructure support
 - ✅ **5 containers** shared by all tests
 - ✅ **20 schemas** for isolation
@@ -441,8 +523,10 @@ This demo showcases:
 - ❌ **Fails CI/CD** when tests fail (protects master branch)
 
 **🚀 Quick Start Options:**
-- **Full Suite:** `npx vitest run src/__tests__/ultimateProductionDemo.test.ts`
-- **Selective:** `npm run test:selective user-actions.test.ts` (NEW!)
+
+1. **Full Suite:** `npx vitest run src/__tests__/ultimateProductionDemo.test.ts`
+2. **🗄️ Database CRUD:** `npx vitest run src/__tests__/databaseCRUDOperations.test.ts` ← **SEE REAL DATA!**
+3. **Selective:** `npm run test:selective user-actions.test.ts` (NEW!)
 
 **For production:** Remove the 3 demo failure files, and all tests will pass ✅
 

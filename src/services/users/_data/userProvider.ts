@@ -1,5 +1,5 @@
-import { DatabaseService } from '../../../utils/DatabaseService';
-import type { ServerCtxType } from '../../../lib/utils/types';
+import { DatabaseService } from "../../../utils/DatabaseService";
+import type { ServerCtxType } from "../../../lib/utils/types";
 
 /**
  * User Provider
@@ -19,7 +19,7 @@ export function userProvider(serverCtx: ServerCtxType) {
       WHERE id = ${parseInt(userId, 10)}
       LIMIT 1
     `;
-    return (result && result.length > 0) ? result[0] : null;
+    return result && result.length > 0 ? result[0] : null;
   }
 
   async function getUserByEmail(email: string) {
@@ -28,7 +28,7 @@ export function userProvider(serverCtx: ServerCtxType) {
       WHERE email = ${email}
       LIMIT 1
     `;
-    return (result && result.length > 0) ? result[0] : null;
+    return result && result.length > 0 ? result[0] : null;
   }
 
   async function getAllUsers(limit: number = 20, offset: number = 0) {
@@ -61,10 +61,13 @@ export function userProvider(serverCtx: ServerCtxType) {
       )
       RETURNING *
     `;
-    return (result && result.length > 0) ? result[0] : null;
+    return result && result.length > 0 ? result[0] : null;
   }
 
-  async function updateUser(userId: string, input: { name?: string; isActive?: boolean }) {
+  async function updateUser(
+    userId: string,
+    input: { name?: string; isActive?: boolean }
+  ) {
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -84,14 +87,16 @@ export function userProvider(serverCtx: ServerCtxType) {
 
     updates.push(`"updatedAt" = datetime('now')`);
 
-    const updateClause = updates.join(', ');
+    const updateClause = updates.join(", ");
     const result = await db.$queryRawUnsafe(
-      `UPDATE User SET ${updateClause} WHERE id = $${values.length + 1} RETURNING *`,
+      `UPDATE User SET ${updateClause} WHERE id = $${
+        values.length + 1
+      } RETURNING *`,
       ...values,
       parseInt(userId, 10)
     );
 
-    return (result && result.length > 0) ? result[0] : null;
+    return result && result.length > 0 ? result[0] : null;
   }
 
   async function deleteUser(userId: string) {
@@ -108,15 +113,19 @@ export function userProvider(serverCtx: ServerCtxType) {
       WHERE id = ${parseInt(userId, 10)}
       RETURNING *
     `;
-    return (result && result.length > 0) ? result[0] : null;
+    return result && result.length > 0 ? result[0] : null;
   }
 
-  async function searchUsers(searchTerm: string, limit: number = 20, offset: number = 0) {
+  async function searchUsers(
+    searchTerm: string,
+    limit: number = 20,
+    offset: number = 0
+  ) {
     const result = await db.$queryRaw`
       SELECT * FROM User
       WHERE
-        LOWER(email) LIKE LOWER(${'%' + searchTerm + '%'}) OR
-        LOWER(name) LIKE LOWER(${'%' + searchTerm + '%'})
+        LOWER(email) LIKE LOWER(${"%" + searchTerm + "%"}) OR
+        LOWER(name) LIKE LOWER(${"%" + searchTerm + "%"})
       ORDER BY "createdAt" DESC
       LIMIT ${limit} OFFSET ${offset}
     `;

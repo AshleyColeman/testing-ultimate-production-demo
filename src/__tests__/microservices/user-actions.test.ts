@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
-// Action imports - Go UP 2 levels, then into services
+// Action imports - Using relative paths
 import {
   getUserByIdAction,
   getAllUsersAction,
@@ -10,522 +10,500 @@ import {
   searchUsersAction,
 } from "../../services/users/actions";
 
-// Infrastructure imports - Go UP 1 level, then into shared
+// Infrastructure imports
 import {
   getInfrastructure,
   getSchemasByService,
   recordTestExecution,
 } from "../shared/testInfrastructure";
 
-// Helper imports - Go UP 1 level, then into shared
+// Helper imports
 import { simulateProductionOperation } from "../shared/testHelpers";
 
-/**
- * USER ACTIONS INTEGRATION TESTS
- *
- * Tests the complete action layer following Inter-Train architecture:
- * - Actions (validation + authorization) → Services → Providers → Database
- *
- * Pattern: Server actions with double await calling convention
- * Database: Real PostgreSQL with dynamic schema creation
- * Test Count: 10 tests covering all 6 exported actions
- *
- * Actions under test:
- * 1. createUserAction - Create new user with validation
- * 2. getUserByIdAction - Get user by ID
- * 3. getAllUsersAction - Get all users with pagination
- * 4. updateUserAction - Update user data
- * 5. deleteUserAction - Delete user
- * 6. searchUsersAction - Search users with filters
- */
+import type { PrismaClient } from "@prisma/client";
 
 /**
- * Helper function to execute user action tests with proper error handling and metrics
+ * 🧪 USER ACTIONS INTEGRATION TEST
+ *
+ * Tests all 6 server actions with validation, authorization, and service orchestration.
+ * Following Inter-Train pattern: Actions → Services → Providers → Database
+ *
+ * Actions tested:
+ * - getUserByIdAction (READ single)
+ * - getAllUsersAction (READ all with pagination)
+ * - createUserAction (CREATE)
+ * - updateUserAction (UPDATE)
+ * - deleteUserAction (DELETE)
+ * - searchUsersAction (SEARCH with filters)
  */
-async function executeUserActionTest(
-  testName: string,
-  testFunction: () => Promise<any>,
-  expectedToSucceed: boolean = true
-): Promise<any> {
-  const startTime = Date.now();
-  let result: any;
-  let testResult: string = "success";
 
-  try {
-    result = await testFunction();
-
-    // Validate result structure for successful actions
-    if (expectedToSucceed) {
-      expect(result).toBeDefined();
-      expect(result).toHaveProperty("result");
-    }
-  } catch (err) {
-    testResult = "failure";
-    if (expectedToSucceed) {
-      throw err; // Re-throw if we expected success
-    }
-    // Return error for validation in test
-    return { error: err };
-  }
-
-  const executionTime = Date.now() - startTime;
-
-  // Record test execution metrics
-  await recordTestExecution(
-    "user-actions",
-    testName,
-    testResult,
-    executionTime,
-    { testName, expectedToSucceed }
-  );
-
-  return result;
-}
-
-/**
- * Generate unique test data to avoid conflicts
- */
-function generateUniqueEmail(testNumber: number): string {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substr(2, 9);
-  return `test.user.${testNumber}.${timestamp}.${random}@example.com`;
-}
-
-function generateUniqueName(testNumber: number): string {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substr(2, 9);
-  return `Test User ${testNumber} ${timestamp} ${random}`;
-}
-
-describe("User Actions - Complete Integration Tests", () => {
+describe("User Actions Integration Tests", () => {
+  let testSchema: { prisma: PrismaClient; schemaName: string };
   let infra: any;
-  let schemas: any[];
-  let schema: any;
 
   beforeAll(async () => {
-    // Skill 1: Access Infrastructure
+    // Get shared infrastructure
     infra = await getInfrastructure();
 
-    // Skill 3: Select Random Schema
-    schemas = await getSchemasByService("auth");
-    schema = schemas[Math.floor(Math.random() * schemas.length)];
+    // Select random schema for this test
+    const schemas = await getSchemasByService("auth");
+    testSchema = schemas[Math.floor(Math.random() * schemas.length)];
 
-    // Skill 4: Create Dynamic Schema
-    // Create users table with all required columns and constraints
-    await schema.prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "${schema.schemaName}".users (
+    // Ensure users table exists with correct schema
+    await testSchema.prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${testSchema.schemaName}".users (
         id VARCHAR(255) PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
-        name VARCHAR(255) NOT NULL,
+        name VARCHAR(100) NOT NULL,
         "isActive" BOOLEAN DEFAULT true,
-        "createdAt" TIMESTAMP DEFAULT NOW(),
-        "updatedAt" TIMESTAMP DEFAULT NOW()
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Create indexes for performance
-    await schema.prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS "idx_users_email" ON "${schema.schemaName}".users(email)
-    `);
-
-    await schema.prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS "idx_users_name" ON "${schema.schemaName}".users(name)
-    `);
-
-    await schema.prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS "idx_users_created" ON "${schema.schemaName}".users("createdAt")
-    `);
+    infra.logger.log(
+      `[User Actions Test] Using schema: ${testSchema.schemaName}`
+    );
   });
 
   afterAll(async () => {
-    // Cleanup: Drop test table
-    if (schema?.prisma) {
-      await schema.prisma.$executeRawUnsafe(`
-        DROP TABLE IF EXISTS "${schema.schemaName}".users CASCADE
-      `);
+    // Cleanup: Remove test data
+    if (testSchema?.prisma) {
+      await testSchema.prisma.$executeRawUnsafe(
+        `TRUNCATE TABLE "${testSchema.schemaName}".users CASCADE`
+      );
     }
   });
 
-  it("[Test 1/10] CREATE - Create user with valid data", async () => {
+  /**
+   * Helper function to execute user action tests with proper error handling and metrics
+   */
+  async function executeUserActionTest(
+    testName: string,
+    testFn: () => Promise<void>
+  ): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      await testFn();
+
+      const duration = Date.now() - startTime;
+      await recordTestExecution("user-actions", testName, "success", duration, {
+        schema: testSchema.schemaName,
+      });
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      await recordTestExecution("user-actions", testName, "failure", duration, {
+        schema: testSchema.schemaName,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  it("[Test 1/10] CREATE - Successfully create user with valid data", async () => {
     await executeUserActionTest("Create user with valid data", async () => {
-      // Skill 6: Generate Smart Data
-      const testInput = {
-        email: generateUniqueEmail(1),
-        name: generateUniqueName(1),
-        database: schema.prisma, // Database injection for testing
-      };
+      // Generate unique test data to avoid conflicts
+      const uniqueEmail = `test_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}@example.com`;
+      const uniqueName = `Test User ${Date.now()}`;
 
-      // ✅ CRITICAL: Double await pattern for server actions
-      const actionHandler = await createUserAction;
-      const result = await actionHandler(testInput as any);
+      // Simulate production operation delay
+      const executionTime = await simulateProductionOperation();
 
-      // Validate response structure
+      // Call action with database injection (double await pattern)
+      const result = await (
+        await createUserAction
+      )({
+        email: uniqueEmail,
+        name: uniqueName,
+        database: testSchema.prisma,
+      });
+
+      // Verify result structure
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
-      expect(result.result.email).toBe(testInput.email);
-      expect(result.result.name).toBe(testInput.name);
-      expect(result.result.isActive).toBe(true);
-      expect(result.result.id).toBeDefined();
       expect(result.message).toBe("Successfully created user");
 
-      // Skill 7: Include Production Delays
-      const executionTime = await simulateProductionOperation();
+      // Verify user data
+      expect(result.result.email).toBe(uniqueEmail);
+      expect(result.result.name).toBe(uniqueName);
+      expect(result.result.id).toBeDefined();
+      expect(result.result.isActive).toBe(true);
+
+      // Verify timing
       expect(executionTime).toBeGreaterThan(0);
       expect(executionTime).toBeLessThan(12000);
-
-      return result;
     });
   });
 
-  it("[Test 2/10] VALIDATE - Invalid email format triggers validation error", async () => {
+  it("[Test 2/10] CREATE - Fail with duplicate email constraint", async () => {
     await executeUserActionTest(
-      "Invalid email format",
+      "Create user with duplicate email",
       async () => {
-        const testInput = {
-          email: "not-a-valid-email", // Invalid format
-          name: generateUniqueName(2),
-          database: schema.prisma,
-        };
+        // Create first user
+        const uniqueEmail = `duplicate_${Date.now()}@example.com`;
 
+        await (
+          await createUserAction
+        )({
+          email: uniqueEmail,
+          name: "First User",
+          database: testSchema.prisma,
+        });
+
+        // Simulate production delay
+        await simulateProductionOperation();
+
+        // Attempt to create duplicate user
         try {
-          const actionHandler = await createUserAction;
-          await actionHandler(testInput as any);
-          expect.fail("Should have thrown validation error");
-        } catch (error: any) {
-          // Skill 9: Test Error Scenarios
+          await (
+            await createUserAction
+          )({
+            email: uniqueEmail,
+            name: "Second User",
+            database: testSchema.prisma,
+          });
+
+          expect.fail("Should have thrown unique constraint error");
+        } catch (error) {
           expect(error).toBeDefined();
-          expect(error.name).toBe("ZodError");
-          expect(error.issues).toBeDefined();
-          expect(error.issues[0].message).toContain("Invalid email");
+
+          // PostgreSQL unique constraint violation (P2002)
+          if (typeof error === "object" && error !== null && "code" in error) {
+            expect(error.code).toBe("P2002");
+          } else if (error instanceof Error) {
+            expect(error.message).toMatch(/unique|duplicate|constraint/i);
+          }
         }
-
-        const executionTime = await simulateProductionOperation();
-        expect(executionTime).toBeGreaterThan(0);
-
-        return { validated: true };
-      },
-      true
+      }
     );
   });
 
-  it("[Test 3/10] READ - Get user by ID (existing user)", async () => {
-    await executeUserActionTest("Get user by ID - existing", async () => {
-      // First create a user
-      const createInput = {
-        email: generateUniqueEmail(3),
-        name: generateUniqueName(3),
-        database: schema.prisma,
-      };
+  it("[Test 3/10] READ - Get user by ID successfully", async () => {
+    await executeUserActionTest("Get user by ID", async () => {
+      // Create test user first
+      const uniqueEmail = `get_by_id_${Date.now()}@example.com`;
+      const created = await (
+        await createUserAction
+      )({
+        email: uniqueEmail,
+        name: "Get By ID Test",
+        database: testSchema.prisma,
+      });
 
-      const createHandler = await createUserAction;
-      const createResult = await createHandler(createInput as any);
-      const userId = createResult.result.id;
+      const userId = created.result.id;
 
-      // Now fetch it by ID
-      const getInput = {
+      // Simulate production delay
+      const executionTime = await simulateProductionOperation();
+
+      // Get user by ID
+      const result = await (
+        await getUserByIdAction
+      )({
         userId,
-        database: schema.prisma,
-      };
+        database: testSchema.prisma,
+      } as any);
 
-      const getHandler = await getUserByIdAction;
-      const result = await getHandler(getInput as any);
-
-      // Validate response
+      // Verify result
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
       expect(result.result.id).toBe(userId);
-      expect(result.result.email).toBe(createInput.email);
-      expect(result.result.name).toBe(createInput.name);
+      expect(result.result.email).toBe(uniqueEmail);
+      expect(result.result.name).toBe("Get By ID Test");
 
-      const executionTime = await simulateProductionOperation();
+      // Verify timing
       expect(executionTime).toBeGreaterThan(0);
-
-      return result;
+      expect(executionTime).toBeLessThan(12000);
     });
   });
 
-  it("[Test 4/10] ERROR - Get user by ID (non-existent user)", async () => {
-    await executeUserActionTest(
-      "Get user by ID - non-existent",
-      async () => {
-        const getInput = {
-          userId: `nonexistent_${Date.now()}`,
-          database: schema.prisma,
-        };
+  it("[Test 4/10] READ - Fail to get non-existent user (P2025)", async () => {
+    await executeUserActionTest("Get non-existent user", async () => {
+      const nonExistentId = `usr_nonexistent_${Date.now()}`;
 
-        try {
-          const getHandler = await getUserByIdAction;
-          const result = await getHandler(getInput as any);
+      // Simulate production delay
+      await simulateProductionOperation();
 
-          // Service should return null for non-existent user
-          expect(result.result).toBeNull();
-        } catch (error: any) {
-          // Or it might throw an error - both are valid patterns
-          expect(error).toBeDefined();
+      // Attempt to get non-existent user
+      try {
+        await (
+          await getUserByIdAction
+        )({
+          userId: nonExistentId,
+          database: testSchema.prisma,
+        } as any);
+
+        expect.fail("Should have thrown not found error");
+      } catch (error) {
+        expect(error).toBeDefined();
+
+        // PostgreSQL not found error (P2025) or standard error
+        if (typeof error === "object" && error !== null && "code" in error) {
+          expect(error.code).toBe("P2025");
+        } else if (error instanceof Error) {
+          expect(error.message).toMatch(/not found|doesn't exist/i);
         }
-
-        const executionTime = await simulateProductionOperation();
-        expect(executionTime).toBeGreaterThan(0);
-
-        return { validated: true };
-      },
-      true
-    );
+      }
+    });
   });
 
-  it("[Test 5/10] UPDATE - Update user with valid data", async () => {
+  it("[Test 5/10] UPDATE - Successfully update user with valid data", async () => {
     await executeUserActionTest("Update user with valid data", async () => {
-      // First create a user
-      const createInput = {
-        email: generateUniqueEmail(5),
-        name: generateUniqueName(5),
-        database: schema.prisma,
-      };
+      // Create test user first
+      const uniqueEmail = `update_${Date.now()}@example.com`;
+      const created = await (
+        await createUserAction
+      )({
+        email: uniqueEmail,
+        name: "Original Name",
+        database: testSchema.prisma,
+      });
 
-      const createHandler = await createUserAction;
-      const createResult = await createHandler(createInput as any);
-      const userId = createResult.result.id;
+      const userId = created.result.id;
 
-      // Now update it
-      const updateInput = {
+      // Simulate production delay
+      const executionTime = await simulateProductionOperation();
+
+      // Update user
+      const updatedName = `Updated Name ${Date.now()}`;
+      const result = await (
+        await updateUserAction
+      )({
         id: userId,
-        name: `Updated ${generateUniqueName(5)}`,
+        name: updatedName,
         isActive: false,
-        database: schema.prisma,
-      };
+        database: testSchema.prisma,
+      } as any);
 
-      const updateHandler = await updateUserAction;
-      const result = await updateHandler(updateInput as any);
-
-      // Validate response
+      // Verify result
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
-      expect(result.result.id).toBe(userId);
-      expect(result.result.name).toBe(updateInput.name);
-      expect(result.result.isActive).toBe(false);
       expect(result.message).toBe("Successfully updated user");
+      expect(result.result.id).toBe(userId);
+      expect(result.result.name).toBe(updatedName);
+      expect(result.result.isActive).toBe(false);
 
-      const executionTime = await simulateProductionOperation();
+      // Verify timing
       expect(executionTime).toBeGreaterThan(0);
-
-      return result;
+      expect(executionTime).toBeLessThan(12000);
     });
   });
 
-  it("[Test 6/10] UPDATE - Partial update (only name)", async () => {
-    await executeUserActionTest("Partial update - only name", async () => {
-      // First create a user
-      const createInput = {
-        email: generateUniqueEmail(6),
-        name: generateUniqueName(6),
-        database: schema.prisma,
-      };
+  it("[Test 6/10] UPDATE - Fail to update non-existent user (P2025)", async () => {
+    await executeUserActionTest("Update non-existent user", async () => {
+      const nonExistentId = `usr_nonexistent_${Date.now()}`;
 
-      const createHandler = await createUserAction;
-      const createResult = await createHandler(createInput as any);
-      const userId = createResult.result.id;
-      const originalActive = createResult.result.isActive;
+      // Simulate production delay
+      await simulateProductionOperation();
 
-      // Update only name
-      const updateInput = {
-        id: userId,
-        name: `Partial Update ${Date.now()}`,
-        database: schema.prisma,
-      };
+      // Attempt to update non-existent user
+      try {
+        await (
+          await updateUserAction
+        )({
+          id: nonExistentId,
+          name: "Should Fail",
+          database: testSchema.prisma,
+        } as any);
 
-      const updateHandler = await updateUserAction;
-      const result = await updateHandler(updateInput as any);
+        expect.fail("Should have thrown not found error");
+      } catch (error) {
+        expect(error).toBeDefined();
 
-      // Validate partial update
-      expect(result).toBeDefined();
-      expect(result.result).toBeDefined();
-      expect(result.result.name).toBe(updateInput.name);
-      expect(result.result.isActive).toBe(originalActive); // Should remain unchanged
-
-      const executionTime = await simulateProductionOperation();
-      expect(executionTime).toBeGreaterThan(0);
-
-      return result;
+        // PostgreSQL not found error (P2025) or standard error
+        if (typeof error === "object" && error !== null && "code" in error) {
+          expect(error.code).toBe("P2025");
+        } else if (error instanceof Error) {
+          expect(error.message).toMatch(/not found|doesn't exist/i);
+        }
+      }
     });
   });
 
-  it("[Test 7/10] DELETE - Delete user successfully", async () => {
+  it("[Test 7/10] DELETE - Successfully delete user", async () => {
     await executeUserActionTest("Delete user successfully", async () => {
-      // First create a user
-      const createInput = {
-        email: generateUniqueEmail(7),
-        name: generateUniqueName(7),
-        database: schema.prisma,
-      };
+      // Create test user first
+      const uniqueEmail = `delete_${Date.now()}@example.com`;
+      const created = await (
+        await createUserAction
+      )({
+        email: uniqueEmail,
+        name: "To Be Deleted",
+        database: testSchema.prisma,
+      });
 
-      const createHandler = await createUserAction;
-      const createResult = await createHandler(createInput as any);
-      const userId = createResult.result.id;
+      const userId = created.result.id;
 
-      // Now delete it
-      const deleteInput = {
+      // Simulate production delay
+      const executionTime = await simulateProductionOperation();
+
+      // Delete user
+      const result = await (
+        await deleteUserAction
+      )({
         userId,
-        database: schema.prisma,
-      };
+        database: testSchema.prisma,
+      } as any);
 
-      const deleteHandler = await deleteUserAction;
-      const result = await deleteHandler(deleteInput as any);
-
-      // Validate deletion
+      // Verify result
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
       expect(result.message).toBe("Successfully deleted user");
 
-      // Verify user is deleted
-      const getInput = { userId, database: schema.prisma };
-      const getHandler = await getUserByIdAction;
-      const getResult = await getHandler(getInput as any);
-      expect(getResult.result).toBeNull();
+      // Verify user is actually deleted
+      try {
+        await (
+          await getUserByIdAction
+        )({
+          userId,
+          database: testSchema.prisma,
+        } as any);
+        expect.fail("User should have been deleted");
+      } catch (error) {
+        // Expected - user not found
+        expect(error).toBeDefined();
+      }
 
-      const executionTime = await simulateProductionOperation();
+      // Verify timing
       expect(executionTime).toBeGreaterThan(0);
-
-      return result;
+      expect(executionTime).toBeLessThan(12000);
     });
   });
 
-  it("[Test 8/10] LIST - Get all users with pagination", async () => {
-    await executeUserActionTest("Get all users with pagination", async () => {
-      // Create multiple users for pagination test
-      const createHandler = await createUserAction;
+  it("[Test 8/10] DELETE - Fail to delete non-existent user (P2025)", async () => {
+    await executeUserActionTest("Delete non-existent user", async () => {
+      const nonExistentId = `usr_nonexistent_${Date.now()}`;
 
-      for (let i = 0; i < 3; i++) {
-        const createInput = {
-          email: generateUniqueEmail(800 + i),
-          name: generateUniqueName(800 + i),
-          database: schema.prisma,
-        };
-        await createHandler(createInput as any);
+      // Simulate production delay
+      await simulateProductionOperation();
+
+      // Attempt to delete non-existent user
+      try {
+        await (
+          await deleteUserAction
+        )({
+          userId: nonExistentId,
+          database: testSchema.prisma,
+        } as any);
+
+        expect.fail("Should have thrown not found error");
+      } catch (error) {
+        expect(error).toBeDefined();
+
+        // PostgreSQL not found error (P2025) or standard error
+        if (typeof error === "object" && error !== null && "code" in error) {
+          expect(error.code).toBe("P2025");
+        } else if (error instanceof Error) {
+          expect(error.message).toMatch(/not found|doesn't exist/i);
+        }
       }
+    });
+  });
+
+  it("[Test 9/10] LIST - Get all users with pagination", async () => {
+    await executeUserActionTest("Get all users with pagination", async () => {
+      // Create multiple test users
+      const baseEmail = `list_${Date.now()}`;
+      await (
+        await createUserAction
+      )({
+        email: `${baseEmail}_1@example.com`,
+        name: "User 1",
+        database: testSchema.prisma,
+      });
+      await (
+        await createUserAction
+      )({
+        email: `${baseEmail}_2@example.com`,
+        name: "User 2",
+        database: testSchema.prisma,
+      });
+      await (
+        await createUserAction
+      )({
+        email: `${baseEmail}_3@example.com`,
+        name: "User 3",
+        database: testSchema.prisma,
+      });
+
+      // Simulate production delay
+      const executionTime = await simulateProductionOperation();
 
       // Get all users with pagination
-      const listInput = {
+      const result = await (
+        await getAllUsersAction
+      )({
         page: 1,
         limit: 10,
-        sortBy: "createdAt" as const,
-        sortOrder: "desc" as const,
-        database: schema.prisma,
-      };
+        sortBy: "createdAt",
+        sortOrder: "desc",
+        database: testSchema.prisma,
+      } as any);
 
-      const listHandler = await getAllUsersAction;
-      const result = await listHandler(listInput as any);
-
-      // Validate response
+      // Verify result
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
       expect(Array.isArray(result.result)).toBe(true);
-      expect(result.result.length).toBeGreaterThan(0);
+      expect(result.result.length).toBeGreaterThanOrEqual(3);
 
-      // Validate user structure
-      const firstUser = result.result[0];
-      expect(firstUser).toHaveProperty("id");
-      expect(firstUser).toHaveProperty("email");
-      expect(firstUser).toHaveProperty("name");
-      expect(firstUser).toHaveProperty("isActive");
-
-      const executionTime = await simulateProductionOperation();
+      // Verify timing
       expect(executionTime).toBeGreaterThan(0);
-
-      return result;
+      expect(executionTime).toBeLessThan(12000);
     });
   });
 
-  it("[Test 9/10] SEARCH - Search users with filters", async () => {
+  it("[Test 10/10] SEARCH - Search users with filters", async () => {
     await executeUserActionTest("Search users with filters", async () => {
-      // Create a user with unique search term
-      const searchTerm = `SearchTest${Date.now()}`;
-      const createInput = {
-        email: generateUniqueEmail(9),
-        name: searchTerm,
-        database: schema.prisma,
-      };
+      // Create test users with searchable data
+      const searchTerm = `search_${Date.now()}`;
+      await (
+        await createUserAction
+      )({
+        email: `${searchTerm}_alpha@example.com`,
+        name: `${searchTerm} Alpha User`,
+        database: testSchema.prisma,
+      });
+      await (
+        await createUserAction
+      )({
+        email: `${searchTerm}_beta@example.com`,
+        name: `${searchTerm} Beta User`,
+        database: testSchema.prisma,
+      });
 
-      const createHandler = await createUserAction;
-      await createHandler(createInput as any);
+      // Simulate production delay
+      const executionTime = await simulateProductionOperation();
 
-      // Search for the user
-      const searchInput = {
+      // Search users
+      const result = await (
+        await searchUsersAction
+      )({
         search: searchTerm,
         page: 1,
         limit: 10,
-        sortBy: "createdAt" as const,
-        sortOrder: "desc" as const,
-        database: schema.prisma,
-      };
+        sortBy: "name",
+        sortOrder: "asc",
+        database: testSchema.prisma,
+      } as any);
 
-      const searchHandler = await searchUsersAction;
-      const result = await searchHandler(searchInput as any);
-
-      // Validate search results
+      // Verify result
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
       expect(Array.isArray(result.result)).toBe(true);
+      expect(result.result.length).toBeGreaterThanOrEqual(2);
 
-      // Should find at least our test user
-      const foundUser = result.result.find((u: any) => u.name === searchTerm);
-      expect(foundUser).toBeDefined();
-      expect(foundUser?.name).toBe(searchTerm);
+      // Verify search filtering worked
+      result.result.forEach((user: any) => {
+        const matchesSearch =
+          user.email.includes(searchTerm) || user.name.includes(searchTerm);
+        expect(matchesSearch).toBe(true);
+      });
 
-      const executionTime = await simulateProductionOperation();
+      // Verify timing
       expect(executionTime).toBeGreaterThan(0);
-
-      return result;
+      expect(executionTime).toBeLessThan(12000);
     });
-  });
-
-  it("[Test 10/10] CONSTRAINT - Duplicate email constraint violation", async () => {
-    await executeUserActionTest(
-      "Duplicate email constraint violation",
-      async () => {
-        const duplicateEmail = generateUniqueEmail(10);
-
-        // Create first user
-        const createInput1 = {
-          email: duplicateEmail,
-          name: generateUniqueName(10),
-          database: schema.prisma,
-        };
-
-        const createHandler = await createUserAction;
-        await createHandler(createInput1 as any);
-
-        // Try to create another user with same email
-        const createInput2 = {
-          email: duplicateEmail, // Same email
-          name: generateUniqueName(1001),
-          database: schema.prisma,
-        };
-
-        try {
-          await createHandler(createInput2 as any);
-          expect.fail("Should have thrown unique constraint error");
-        } catch (error: any) {
-          // Skill 8: Database-Aware Error Handling
-          expect(error).toBeDefined();
-
-          // PostgreSQL unique constraint violation
-          // Could be P2002 (Prisma) or 23505 (PostgreSQL)
-          const errorStr = error.message || error.toString();
-          const hasConstraintError =
-            errorStr.includes("P2002") ||
-            errorStr.includes("23505") ||
-            errorStr.includes("unique") ||
-            errorStr.includes("duplicate");
-
-          expect(hasConstraintError).toBe(true);
-        }
-
-        const executionTime = await simulateProductionOperation();
-        expect(executionTime).toBeGreaterThan(0);
-
-        return { validated: true };
-      },
-      true
-    );
   });
 });
