@@ -28,10 +28,10 @@ import { simulateProductionOperation } from "./shared/testHelpers";
 
 /**
  * Helper function to get test file from environment variable
- * 
+ *
  * NOTE: Direct vitest calls (npx vitest run ... -- file.test.ts) do NOT work
  * because Vitest runs tests in worker processes that don't receive CLI args.
- * 
+ *
  * MUST use: npm run test:selective file.test.ts
  */
 function getTestFileFromArgs(): string | null {
@@ -74,21 +74,31 @@ describe("🎯 SELECTIVE TEST RUNNER", () => {
       console.log(`\n${"=".repeat(80)}`);
       console.log(`❌ NO TEST FILE SPECIFIED`);
       console.log(`${"=".repeat(80)}\n`);
-      
+
       console.log(`📋 CORRECT Usage (via npm script):`);
       console.log(`   npm run test:selective user-actions.test.ts`);
       console.log(`   npm run test:selective auth-login.test.ts`);
       console.log(`   npm run test:selective payment-process.test.ts`);
-      
+
       console.log(`\n⚠️  IMPORTANT: Direct vitest calls do NOT work:`);
-      console.log(`   ❌ npx vitest run src/__tests__/selectiveTestRunner.test.ts -- user-actions.test.ts`);
-      console.log(`   ❌ npx vitest run src/__tests__/microservices/user-actions.test.ts`);
-      
-      console.log(`\n� WHY: Vitest runs tests in worker processes that don't receive CLI arguments.`);
-      console.log(`   The npm script (test:selective) uses test-selective.cjs to set environment`);
+      console.log(
+        `   ❌ npx vitest run src/__tests__/selectiveTestRunner.test.ts -- user-actions.test.ts`
+      );
+      console.log(
+        `   ❌ npx vitest run src/__tests__/microservices/user-actions.test.ts`
+      );
+
+      console.log(
+        `\n� WHY: Vitest runs tests in worker processes that don't receive CLI arguments.`
+      );
+      console.log(
+        `   The npm script (test:selective) uses test-selective.cjs to set environment`
+      );
       console.log(`   variables that the worker process CAN read.`);
-      
-      console.log(`\n�📁 Available test files in src/__tests__/microservices/:`);
+
+      console.log(
+        `\n�📁 Available test files in src/__tests__/microservices/:`
+      );
 
       // List available test files
       try {
@@ -127,14 +137,18 @@ describe("🎯 SELECTIVE TEST RUNNER", () => {
       console.log(`\n${"=".repeat(80)}`);
       console.log(`🚀 IMPORTING TEST FILE: ${testFileName}`);
       console.log(`📁 Path: ${testFilePath}`);
-      console.log(`🏗️  Infrastructure: ✅ Available (5 containers, 20 schemas)`);
+      console.log(
+        `🏗️  Infrastructure: ✅ Available (5 containers, 20 schemas)`
+      );
       console.log(`${"=".repeat(80)}\n`);
 
       const testModule = await import(testFilePath);
 
       console.log(`\n${"=".repeat(80)}`);
       console.log(`✅ TEST FILE LOADED: ${testFileName}`);
-      console.log(`🎯 All tests from this file have been registered with Vitest`);
+      console.log(
+        `🎯 All tests from this file have been registered with Vitest`
+      );
       console.log(`� Check the test output above for execution results`);
       console.log(`${"=".repeat(80)}\n`);
 
@@ -157,7 +171,9 @@ describe("🎯 SELECTIVE TEST RUNNER", () => {
       console.log(`   • Test File: ${testFileName}`);
       console.log(`   • Load Time: ${executionTime}ms`);
       console.log(`   • Infrastructure: ✅ Full (5 containers, 20 schemas)`);
-      console.log(`   • Test Module: ${testModule ? "✅ Loaded" : "❌ Failed"}`);
+      console.log(
+        `   • Test Module: ${testModule ? "✅ Loaded" : "❌ Failed"}`
+      );
 
       expect(testModule).toBeDefined();
     } catch (error) {
@@ -173,7 +189,11 @@ describe("🎯 SELECTIVE TEST RUNNER", () => {
         testFileName.replace(".test.ts", ""),
         "failure",
         executionTime,
-        { testFileName, schema: schema.schemaName, error: (error as Error).message }
+        {
+          testFileName,
+          schema: schema.schemaName,
+          error: (error as Error).message,
+        }
       );
 
       console.error(`\n${"=".repeat(80)}`);

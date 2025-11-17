@@ -197,7 +197,9 @@ export async function initializeInfrastructure(): Promise<TestInfrastructure> {
               } catch (error) {
                 attempts++;
                 if (attempts >= maxAttempts) {
-                  logger.error(`❌ Failed to connect to ${service} after ${maxAttempts} attempts`);
+                  logger.error(
+                    `❌ Failed to connect to ${service} after ${maxAttempts} attempts`
+                  );
                   logger.error(`   Error: ${(error as Error).message}`);
                   throw new Error(
                     `Failed to connect after ${maxAttempts} attempts`
@@ -205,7 +207,9 @@ export async function initializeInfrastructure(): Promise<TestInfrastructure> {
                 }
                 // Longer wait times with exponential backoff
                 const waitTime = Math.min(2000 * Math.pow(1.5, attempts), 8000);
-                logger.info(`   ⏳ Retry ${attempts}/${maxAttempts} in ${waitTime}ms...`);
+                logger.info(
+                  `   ⏳ Retry ${attempts}/${maxAttempts} in ${waitTime}ms...`
+                );
                 await new Promise((resolve) => setTimeout(resolve, waitTime));
               }
             }
