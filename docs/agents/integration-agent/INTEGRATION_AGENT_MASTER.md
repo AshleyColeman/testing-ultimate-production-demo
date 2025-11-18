@@ -105,64 +105,129 @@ You are an **Ultimate Integration Test Agent** specialized in:
 
 ```
 src/
-  __tests__/
-    microservices/
-      [your-test-file].test.ts    ← Your test goes here
+  services/
+    [ServiceName]/
+      __test__/                    ← Test files for THIS service only
+        [action-name].test.ts     ← ONE test file PER action method
+      actions.ts                  ← Server actions file you're testing
+      _data/                      ← Service data layer
+        userSchema.ts             ← Zod schemas
+        userService.ts            ← Business logic
+  __tests__/                      ← Legacy location (NO LONGER USED for actions)
     shared/
       testInfrastructure.ts       ← Contains: getInfrastructure, getSchemasByService, recordTestExecution
       testHelpers.ts              ← Contains: simulateProductionOperation, generateTestData
-  services/
-    [ServiceName].ts              ← Service you're testing
 ```
 
-#### ✅ CORRECT Import Pattern (ALWAYS USE RELATIVE PATHS)
+#### ✅ CORRECT Import Pattern (USE @/ PATH ALIAS)
 
 ```typescript
-// ✅ CORRECT - From src/__tests__/microservices/your-test.test.ts
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+// ✅ CORRECT - From src/services/users/__test__/createUserAction.action.test.ts
+import { describe, it, expect, afterAll } from "vitest";
+import { PrismaClient } from "@prisma/client";
+import { createSchemaAllocator, type TestContext } from "@/tests/schemaAllocator";
 
-// Service imports - Go UP 2 levels, then into services
-import { yourService } from "../../services/YourService";
-import type { YourType, YourInput } from "../../services/YourService";
+// Action imports - Same directory (relative still preferred for same-level imports)
+import { createUserAction } from "../actions";
+import type { CreateUserInput } from "../_data/userSchema";
 
-// Infrastructure imports - Go UP 1 level, then into shared
+// Service imports - Same directory (relative preferred)
+import { userService } from "../_data/userService";
+
+// Helper imports - Use @/ alias for cross-directory imports
 import {
-  getInfrastructure,
-  getSchemasByService,
-  recordTestExecution,
-} from "../shared/testInfrastructure";
-
-// Helper imports - Go UP 1 level, then into shared
-import {
-  simulateProductionOperation,
   generateTestData,
-} from "../shared/testHelpers";
+} from "@/__tests__/shared/testHelpers";
+
+// Type annotations are REQUIRED for all function parameters
+const { useReadSchema, useWriteSchema, cleanup } = createSchemaAllocator("users");
 ```
 
 #### ❌ NEVER Use These (Common Mistakes)
 
 ```typescript
-// ❌ WRONG - Don't use path aliases (may not be configured)
-import { userService } from "@/services/UserService";
-import { getInfrastructure } from "@/shared/testHelpers";
+// ❌ WRONG - Don't use wrong relative paths when @/ alias is available
+import { createSchemaAllocator } from "../../../tests/schemaAllocator"; // Use @/ instead
 
 // ❌ WRONG - Don't import from wrong files
 import { recordTestExecution } from "../shared/testHelpers"; // It's in testInfrastructure!
-import { simulateProductionOperation } from "../shared/testInfrastructure"; // It's in testHelpers!
 
-// ❌ WRONG - Don't use absolute paths
-import { userService } from "src/services/UserService";
+// ❌ WRONG - Don't use absolute src/ paths
+import { userService } from "src/services/UserService"; // Use @/ instead
+
+// ❌ WRONG - Don't omit TypeScript types (causes implicit any errors)
+useWriteSchema(async ({ db, schemaName }) => { // ❌ db and schemaName are implicit any
+
+// ❌ WRONG - Don't put multiple actions in one test file
+// createUser.test.ts should ONLY test createUserAction
+// searchUsers.test.ts should ONLY test searchUsersAction
+
+// ❌ WRONG - Don't use old location src/__tests__/microservices/
+// Use src/services/[serviceName]/__test__/ instead
+
+// ❌ WRONG - Don't mix @/ alias for same-level imports (use relative for clarity)
+import { createUserAction } from "@/services/users/actions"; // Use "../actions" instead
 ```
 
 #### 🎯 Import Checklist (Verify EVERY Test)
 
 Before generating test file, verify:
 
-- [ ] Test file location: `src/__tests__/microservices/<name>.test.ts`
-- [ ] Service imports use: `../../services/`
-- [ ] Infrastructure imports use: `../shared/testInfrastructure`
-- [ ] Helper imports use: `../shared/testHelpers`
-- [ ] All paths are RELATIVE (no `@/` aliases)
+- [ ] Test file location: `src/services/[serviceName]/__test__/[actionName].test.ts`
+- [ ] ONE test file PER action method (never multiple actions in one file)
+- [ ] Action imports use: `"../actions"` (relative for same-level clarity)
+- [ ] Schema imports use: `"../_data/userSchema"` (relative for same-level clarity)
+- [ ] Service imports use: `"../_data/userService"` (relative for same-level clarity)
+- [ ] Infrastructure imports use: `"@/tests/schemaAllocator"` (use @/ alias for cross-directory)
+- [ ] Type imports include: `type TestContext` from schema allocator
+- [ ] Helper imports use: `"@/__tests__/shared/testHelpers"` (for generateTestData only - no simulateProductionOperation)
+- [ ] PrismaClient import: `"@prisma/client"`
+- [ ] Use @/ alias for cross-directory imports, relative for same-level imports
+- [ ] Function parameters are typed: `async ({ db, schemaName }: TestContext)`
+
+#### 🚨 CRITICAL: TypeScript Error Prevention
+
+**ALL Tests Must Follow These TypeScript Rules**:
+
+```typescript
+// ✅ CORRECT - Complete TypeScript setup with @/ alias
+import { describe, it, expect, afterAll } from "vitest";
+import { PrismaClient } from "@prisma/client";
+import { createSchemaAllocator, type TestContext } from "@/tests/schemaAllocator";
+
+const { useReadSchema, useWriteSchema, cleanup } = createSchemaAllocator("users");
+
+// ✅ CORRECT - All parameters are properly typed
+describe("createUserAction", () => {
+  it(
+    "creates a user successfully",
+    useWriteSchema(async ({ db, schemaName }: TestContext) => {
+      // db is PrismaClient, schemaName is string
+      const result = await createUserAction({
+        email: "test@example.com",
+        name: "Test User",
+        database: { client: db, schemaName }, // Properly typed
+      });
+      expect(result).toBeDefined();
+    })
+  );
+});
+```
+
+**Required Imports for ALL Test Files**:
+```typescript
+import { describe, it, expect, afterAll } from "vitest";
+import { PrismaClient } from "@prisma/client";                    // ALWAYS needed
+import { createSchemaAllocator, type TestContext } from "@/tests/schemaAllocator"; // USE @/ ALIAS
+```
+
+**Common TypeScript Errors and Solutions**:
+
+1. **Module not found** → Use `"@/tests/schemaAllocator"` (NOT relative paths for cross-directory imports)
+2. **Implicit any types** → Add `: TestContext` to all destructured parameters
+3. **Missing PrismaClient** → Import `"@prisma/client"`
+4. **Type declarations** → Import `type TestContext` for parameter typing
+5. **Path alias not working** → Verify both `tsconfig.json` and `vitest.config.ts` have `@/` alias configured
 
 ---
 
@@ -188,9 +253,6 @@ await recordTestExecution(
   metadata?: any         // Optional: { testNumber: 1, schema: "public" }
 );
 
-// ✅ simulateProductionOperation - No parameters
-const executionTime = await simulateProductionOperation();
-// Returns: number (milliseconds between 50-10000)
 ```
 
 ### ⚠️ Common Function Signature Errors
@@ -235,31 +297,59 @@ await recordTestExecution(
 - **Configure indexes** for performance testing
 - **Validate schema creation** before proceeding
 
-### Phase 2: Plan
+### Phase 2: Plan (CRITICAL - One File Per Action)
 
 - Understand the service/action/feature to test (auth, payment, inventory, analytics, notification, user actions, etc.)
+- **CRITICAL RULE 1**: ONE test file PER action method
+  - createUserAction → `src/services/users/__test__/createUserAction.action.test.ts`
+  - searchUsersAction → `src/services/users/__test__/searchUsersAction.action.test.ts`
+  - updateUserAction → `src/services/users/__test__/updateUserAction.action.test.ts`
+  - NEVER put multiple actions in one test file
+- **CRITICAL RULE 2**: ALWAYS CREATE __test__ DIRECTORY IF NOT EXISTS
+  - Before creating test files, check if `src/services/[serviceName]/__test__/` directory exists
+  - If directory does not exist, create it automatically using: `mkdir -p src/services/[serviceName]/__test__/`
+  - NEVER place tests in legacy locations like `src/__tests__/microservices/`
+  - Tests MUST be co-located with their source files for proper organization
 - Determine test file location:
-  - For services: `src/__tests__/microservices/<service>-<feature>.test.ts`
-  - For actions: `src/__tests__/microservices/<action>-<feature>.test.ts`
-- Identify 10 test scenarios:
-  - **Services**: 6-7 happy paths + 3-4 error cases (CRUD, constraints, not found)
+  - For services: `src/services/[serviceName]/__test__/[serviceName].service.test.ts`
+  - For actions: `src/services/[serviceName]/__test__/[actionName].action.test.ts`
+- Identify 10 test scenarios for the SINGLE action:
   - **Actions**: 6-7 happy paths + 3-4 error cases (validation, authorization, service orchestration)
 - Check which service schema to use
 - For actions: Identify validation schemas and authorization levels to test
+- Extract Zod schema requirements (required fields, optional fields, defaults)
 
-### Phase 3: Generate
+### Phase 3: Generate (Zod Schema Handling)
 
 - Write test code following detected patterns
 - Use Vitest framework
 - **For Services**: Use appropriate database access method (Prisma Client OR Raw SQL)
 - **For Actions**: Call action methods directly, test validation and authorization layers
+- **CRITICAL**: Handle Zod schemas properly:
+  ```typescript
+  // ✅ CORRECT - Build Zod-compliant objects
+  const userData = generateTestData("user");
+  userData.email = "test@example.com";
+  userData.name = "Test User";
+  userData.database = testDb; // Add database context
+
+  // ✅ CORRECT - Include all required schema fields
+  const searchFilters = generateTestData("filters");
+  searchFilters.search = "alice";
+  searchFilters.page = 1;
+  searchFilters.limit = 10;
+  searchFilters.sortBy = "name"; // Required field
+  searchFilters.sortOrder = "asc"; // Required field
+  searchFilters.database = testDb;
+  ```
 - **Generate conflict-free test data** using intelligent data factories
 - **Apply database/action-specific error handling** based on detected patterns
 - Output test code only (no service/action code changes)
 
 ### Phase 4: Auto-Discovery
 
-- Tests auto-discovered by glob: `src/__tests__/microservices/*.test.ts`
+- Tests auto-discovered by glob: `src/services/**/__test__/*.test.ts`
+- Legacy tests: `src/__tests__/microservices/*.test.ts`
 - Tests auto-executed as part of 530-test suite
 - No orchestrator changes needed
 
@@ -284,7 +374,25 @@ const infra = await getInfrastructure();
 // Returns: { containers, schemas, logger, memoryManager }
 ```
 
-### Rule 2: Every Test Picks Random Schema
+### Rule 2: Tests MUST Be Co-Located With Source Files
+
+**ALWAYS create tests next to the files they test - NEVER in legacy locations**
+
+```typescript
+// ✅ CORRECT - Co-located with source
+// File: src/services/users/__test__/createUserAction.action.test.ts
+const { useReadSchema, useWriteSchema, cleanup } = createSchemaAllocator("users");
+
+// ❌ WRONG - Legacy location (NEVER USE)
+// File: src/__tests__/microservices/user-actions.test.ts ← DEPRECATED!
+```
+
+**Directory Creation Rule**:
+- Always check if `src/services/[serviceName]/__test__/` exists before creating test files
+- If it doesn't exist, create it automatically: `mkdir -p src/services/[serviceName]/__test__/`
+- NEVER assume the directory exists - always verify/create first
+
+### Rule 3: Every Test Picks Random Schema
 
 ```typescript
 const schemas = await getSchemasByService("auth"); // service name
@@ -292,13 +400,13 @@ const schema = schemas[Math.floor(Math.random() * schemas.length)];
 // Returns: { prisma, schemaName }
 ```
 
-### Rule 3: Always 10 Tests Per File
+### Rule 4: Always 10 Tests Per File
 
-- File structure: 10 tests named `[Test 1/10]` through `[Test 10/10]`
+- File structure: 10 tests with clear descriptive names (no numbering prefixes)
 - Mix: 6-7 happy path, 3-4 error scenarios
 - Each test follows same pattern
 
-### Rule 4: Every Test Uses Test Data Factory
+### Rule 5: Every Test Uses Test Data Factory
 
 ```typescript
 // Don't hardcode data
@@ -311,7 +419,7 @@ const user = await schema.prisma.user.create({
 });
 ```
 
-### Rule 5: Every Test Has Realistic Delays
+### Rule 6: Every Test Has Realistic Delays
 
 ```typescript
 const executionTime = await simulateProductionOperation();
@@ -325,7 +433,7 @@ Distribution:
 - 20% 500-2000ms (medium)
 - 10% 2000-10000ms (slow)
 
-### Rule 6: Use Real Database Operations
+### Rule 7: Use Real Database Operations
 
 ```typescript
 // CREATE
@@ -345,7 +453,7 @@ await schema.prisma.user.delete({ where: { id: 1 } });
 const count = await schema.prisma.user.count({ where: { ... } });
 ```
 
-### Rule 7: Test All Error Scenarios
+### Rule 8: Test All Error Scenarios
 
 - Validation errors (invalid input)
 - Not found (P2025)
@@ -362,7 +470,7 @@ try {
 }
 ```
 
-### Rule 8: Record Test Execution
+### Rule 9: Record Test Execution
 
 ```typescript
 await recordTestExecution(
@@ -374,7 +482,7 @@ await recordTestExecution(
 );
 ```
 
-### Rule 9: No External Dependencies
+### Rule 10: No External Dependencies
 
 - ✅ All data from shared infrastructure
 - ✅ Only Prisma database operations
@@ -382,11 +490,39 @@ await recordTestExecution(
 - ❌ No file system access
 - ❌ No environment variables (all from infrastructure)
 
-### Rule 10: One Service Per File
+### Rule 11: One Service Per File
 
 - Each file tests ONE service (auth, payment, inventory, analytics, notification)
 - One file = One feature/operation
 - Cross-service flows = Separate file
+
+### Rule 11: ZOD SCHEMA COMPLIANCE (CRITICAL)
+
+- **ALWAYS check Zod schema requirements before calling actions**
+- **Required fields MUST be provided** (even if they have defaults in Zod)
+- **Database context MUST be added** for testing
+
+```typescript
+// ❌ WRONG - Missing required sortBy and sortOrder
+const searchFilters = { search: "alice", page: 1, limit: 10, database: testDb };
+await searchUsersAction(searchFilters); // TypeScript error!
+
+// ✅ CORRECT - Include ALL required schema fields
+const searchFilters = generateTestData("filters");
+searchFilters.search = "alice";
+searchFilters.page = 1;
+searchFilters.limit = 10;
+searchFilters.sortBy = "name"; // Required by UserFiltersSchema
+searchFilters.sortOrder = "asc"; // Required by UserFiltersSchema
+searchFilters.database = testDb; // Add test database context
+await searchUsersAction(searchFilters);
+```
+
+**Common Zod Schema Issues:**
+- Missing required fields (check schema definitions)
+- Forgetting to add `database` property for testing
+- Not providing default values when they're required
+- Using wrong enum values
 
 ---
 
@@ -531,10 +667,18 @@ const adminProcedure = createProcedure();     // Admin only
 const userProcedure = createProcedure();      // Authenticated users
 const publicProcedure = createProcedure();    // Public access
 
-// 2. Validation Schemas (Zod)
+// 2. Validation Schemas (Zod) - CRITICAL TO READ THESE!
 const CreateUserSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1)
+  email: z.string().email(),                  // Required, validated
+  name: z.string().min(1).max(100),          // Required, length constraints
+});
+
+const UserFiltersSchema = z.object({
+  search: z.string().optional(),              // Optional
+  page: z.coerce.number().min(1).default(1),  // Has default
+  limit: z.coerce.number().min(1).max(100).default(20), // Has default
+  sortBy: z.enum(["email", "name", "createdAt", "updatedAt"]).default("createdAt"), // REQUIRED!
+  sortOrder: z.enum(["asc", "desc"]).default("desc"), // REQUIRED!
 });
 
 // 3. Service Factory Usage
@@ -542,6 +686,22 @@ const result = await ctx.svc.get('userService').create(parsedInput);
 
 // 4. Cache Invalidation
 revalidatePath('/users', 'layout');
+```
+
+**Zod Schema Analysis Requirements**:
+
+```typescript
+// FOR EACH ACTION: Read the schema file and extract requirements
+// Location: src/services/users/_data/userSchema.ts
+
+// createUserAction uses: CreateUserSchema
+// Required fields: email (string, email format), name (string, 1-100 chars)
+// Test data MUST provide both fields
+
+// searchUsersAction uses: UserFiltersSchema
+// Required fields: sortBy (enum), sortOrder (enum) - even though they have defaults!
+// Optional fields: search (string)
+// Test data MUST provide sortBy and sortOrder explicitly
 ```
 
 **Validation Rules Detection**:
@@ -751,16 +911,16 @@ Plan tests based on exported actions:
 ```typescript
 // For 6 exported actions, create tests covering:
 
-[Test 1/10] CREATE - createUserAction with valid data → { result: User }
-[Test 2/10] CREATE - Invalid email format → validation error
-[Test 3/10] READ - getUserByIdAction for existing user → { result: User }
-[Test 4/10] READ - getUserByIdAction for missing user → P2025 error
-[Test 5/10] UPDATE - updateUserAction with valid data → { result: User }
-[Test 6/10] UPDATE - Partial update (only name) → { result: User }
-[Test 7/10] DELETE - deleteUserAction successfully → { result }
-[Test 8/10] LIST - getAllUsersAction with pagination → { result: User[] }
-[Test 9/10] SEARCH - searchUsersAction with filters → { result: User[] }
-[Test 10/10] VALIDATE - Duplicate email constraint → P2002 error
+CREATE - createUserAction with valid data → { result: User }
+CREATE - Invalid email format → validation error
+READ - getUserByIdAction for existing user → { result: User }
+READ - getUserByIdAction for missing user → P2025 error
+UPDATE - updateUserAction with valid data → { result: User }
+UPDATE - Partial update (only name) → { result: User }
+DELETE - deleteUserAction successfully → { result }
+LIST - getAllUsersAction with pagination → { result: User[] }
+SEARCH - searchUsersAction with filters → { result: User[] }
+VALIDATE - Duplicate email constraint → P2002 error
 ```
 
 ### Key Differences: Actions vs Services
@@ -1040,20 +1200,31 @@ const allSchemas = await getSchemasByService("auth");
 
 **File**: `docs/agents/integration-agent/skills/orchestrator-pattern.md`
 
-**Location**: `src/__tests__/microservices/<service>-<feature>.test.ts`
+**Location**:
+- For ACTIONS: `src/services/[serviceName]/__test__/[actionName].action.test.ts`
+- For SERVICES: `src/services/[serviceName]/__test__/[serviceName].service.test.ts`
 
 **Examples**:
 
 ```
-src/__tests__/microservices/auth-login.test.ts
-src/__tests__/microservices/auth-registration.test.ts
-src/__tests__/microservices/payment-process.test.ts
-src/__tests__/microservices/inventory-stock.test.ts
-src/__tests__/microservices/analytics-events.test.ts
-src/__tests__/microservices/notification-email.test.ts
+# ACTIONS (co-located with source files)
+src/services/auth/__test__/loginAction.action.test.ts
+src/services/auth/__test__/registerAction.action.test.ts
+src/services/payment/__test__/processPaymentAction.action.test.ts
+src/services/inventory/__test__/checkStockAction.action.test.ts
+src/services/analytics/__test__/trackEventAction.action.test.ts
+src/services/notification/__test__/sendEmailAction.action.test.ts
+
+# SERVICES (co-located with source files)
+src/services/auth/__test__/auth.service.test.ts
+src/services/payment/__test__/payment.service.test.ts
+src/services/inventory/__test__/inventory.service.test.ts
 ```
 
-**Pattern**: `<service>-<feature>.test.ts`
+**Pattern**:
+- For ACTIONS: `[actionName].action.test.ts`
+- For SERVICES: `[serviceName].service.test.ts`
+- Tests are CO-LOCATED with source files in `src/services/[serviceName]/__test__/`
 
 ---
 
@@ -1290,9 +1461,9 @@ await recordTestExecution(
 
 **Checklist**:
 
-- [x] File location: `src/__tests__/microservices/<service>-<feature>.test.ts`
+- [x] File location: `src/services/[serviceName]/__test__/[fileName].test.ts` (co-located)
 - [x] Exactly 10 tests
-- [x] Test naming: `[Test 1/10]` through `[Test 10/10]`
+- [x] Test naming: Clear descriptive names (no numbering prefixes)
 - [x] Uses `getInfrastructure()` at start
 - [x] Uses `getSchemasByService()` to pick schema
 - [x] Uses Prisma for all operations
@@ -1782,7 +1953,7 @@ export const createUserAction = adminProcedure
 **Error Testing Pattern**:
 
 ```typescript
-it("[Test 9/10] CREATE - Duplicate email constraint", async () => {
+it("CREATE - Duplicate email constraint", async () => {
   const startTime = Date.now();
   try {
     const email = `unique_test_${Date.now()}@example.com`;
@@ -1849,15 +2020,20 @@ When user asks you to generate a test, follow this step-by-step:
   ❗ CRITICAL: Don't skip this - everything else depends on it
 
 Step 1: VERIFY IMPORTS (CRITICAL - Prevent Import Errors)
-  → Test location: src/__tests__/microservices/<name>.test.ts
-  → Service imports: ../../services/YourService
-  → Infrastructure: ../shared/testInfrastructure (getInfrastructure, getSchemasByService, recordTestExecution)
-  → Helpers: ../shared/testHelpers (simulateProductionOperation, generateTestData)
-  → ALL paths MUST be RELATIVE (never use @/ aliases)
+  → Test location: src/services/[serviceName]/__test__/[actionName].test.ts
+  → Action imports: ../actions (for action files - use relative for same-level)
+  → Service imports: ../_data/userService (for service files - use relative for same-level)
+  → Schema imports: ../_data/userSchema (for schema files - use relative for same-level)
+  → Schema Allocator: @/tests/schemaAllocator (createSchemaAllocator, type TestContext) ← USE @/ ALIAS
+  → Helpers: @/__tests__/shared/testHelpers (generateTestData only - no simulateProductionOperation) ← USE @/ ALIAS
+  → PrismaClient: @prisma/client (for type safety)
+  → Use @/ alias for cross-directory imports, relative for same-level imports
+  → ALL function parameters MUST be typed: `async ({ db, schemaName }: TestContext)`
 
 Step 2: place-test-file
-  → Location: src/__tests__/microservices/<service>-<feature>.test.ts
-  → Example: user-service.test.ts, auth-login.test.ts
+  → FOR ACTIONS: Location: src/services/[serviceName]/__test__/[actionName].action.test.ts
+  → FOR SERVICES: Location: src/services/[serviceName]/__test__/[serviceName].service.test.ts
+  → Example: src/services/users/__test__/createUserAction.action.test.ts
 
 Step 3: access-infrastructure
   → const infra = await getInfrastructure();
@@ -2704,7 +2880,7 @@ const result = await withDatabase(getUserByIdAction, 'user-123', schema.prisma);
 
 2. **action-input-types**: Understand ActionInput<T> = T & { database?: any } and different input patterns
 
-3. **place-test-file**: Create file `src/__tests__/microservices/user-actions.test.ts`
+3. **place-test-file**: Create file `src/services/users/__test__/createUserAction.action.test.ts`
 
 4. **access-infrastructure**: Get infra at start of tests
 
@@ -2828,7 +3004,7 @@ Follow the standard pattern with proper input handling for each action type.
 
 1. **analyze-implementation**: Detect this is a service with raw SQL patterns
 
-2. **place-test-file**: Create file `src/__tests__/microservices/auth-login.test.ts`
+2. **place-test-file**: Create file `src/services/auth/__test__/loginAction.action.test.ts`
 
 3. **access-infrastructure**: Get infra at start of tests
 
@@ -2863,9 +3039,9 @@ Before you return any test to the user, verify this checklist:
 
 **File Structure**
 
-- [x] File location: `src/__tests__/microservices/<service>-<feature>.test.ts`
+- [x] File location: `src/services/[serviceName]/__test__/[fileName].test.ts` (co-located)
 - [x] Test count: Exactly 10 tests
-- [x] Test naming: `[Test 1/10]`, `[Test 2/10]`, etc.
+- [x] Test naming: Clear descriptive names (no numbering prefixes)
 
 **Infrastructure**
 
@@ -2927,7 +3103,7 @@ Cannot find module '@/shared/testHelpers' or its corresponding type declarations
 import { userService } from "@/services/UserService";
 import { getInfrastructure } from "@/shared/testHelpers";
 
-// ✅ CORRECT - From src/__tests__/microservices/your-test.test.ts
+// ✅ CORRECT - From src/services/[serviceName]/__test__/your-test.test.ts
 import { userService } from "../../services/UserService";
 import { getInfrastructure } from "../shared/testInfrastructure";
 import { simulateProductionOperation } from "../shared/testHelpers";
@@ -3548,7 +3724,7 @@ Each skill file contains:
 
 ## 🎯 EXAMPLE: COMPLETE ACTION FILE TEST (REFERENCE)
 
-**Location**: Check `src/__tests__/microservices/user-actions.test.ts` for complete example test of `/src/services/users/actions.ts`
+**Location**: Check `src/services/users/__test__/createUserAction.action.test.ts` for complete example test of `/src/services/users/actions.ts`
 
 **This example demonstrates ALL patterns explained in this document:**
 
@@ -4120,8 +4296,8 @@ Example structure:
 
 ```typescript
 import { describe, it, expect, afterAll } from "vitest";
-import { createSchemaAllocator } from "../../../tests/schemaAllocator";
-import { simulateProductionOperation } from "../../../src/__tests__/shared/testHelpers";
+import { PrismaClient } from "@prisma/client";
+import { createSchemaAllocator, type TestContext } from "@/tests/schemaAllocator";
 import { createUserAction } from "../actions";
 
 const { useReadSchema, useWriteSchema, cleanup } = createSchemaAllocator("users");
@@ -4133,7 +4309,7 @@ afterAll(async () => {
 describe("createUserAction", () => {
   it(
     "creates a user successfully with valid input",
-    useWriteSchema(async ({ db, schemaName }) => {
+    useWriteSchema(async ({ db, schemaName }: TestContext) => {
       await simulateProductionOperation();
       const result = await createUserAction({
         name: "Test User",

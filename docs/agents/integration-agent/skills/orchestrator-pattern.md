@@ -9,72 +9,100 @@ description: >
 # Place Test File
 
 **PURPOSE**: Determine correct file location, naming pattern, and structure.
-The orchestrator auto-discovers and runs files in `src/__tests__/microservices/<name>.test.ts`.
+Tests are co-located with source files and auto-discovered by the test runner.
 
 ## When to use
 
 - **Triggers**: "place file", "file location", "naming convention", "where does test go"
-- **Input**: Service name, feature name
-- **Output**: File path (e.g., `src/__tests__/microservices/auth-login.test.ts`)
+- **Input**: Service name, action/feature name
+- **Output**: File path (e.g., `src/services/users/__test__/createUserAction.action.test.ts`)
 - **Not for**: Organizing files; they auto-discover
 - **Required**: Before generating any test file
 
 ## Quick start
 
-1. File goes in: `src/__tests__/microservices/`
-2. Name format: `<service>-<feature>.test.ts` (kebab-case, lowercase)
-3. Example: `auth-login.test.ts`, `payment-checkout.test.ts`
+1. **CRITICAL**: Always check if `src/services/[serviceName]/__test__/` directory exists
+2. If directory doesn't exist, create it: `mkdir -p src/services/[serviceName]/__test__/`
+3. **CO-LOCATE** tests next to source files: `src/services/[serviceName]/__test__/`
+4. **NEVER** use legacy location: `src/__tests__/microservices/`
+5. Name format: `[actionName].action.test.ts` for actions, `[serviceName].service.test.ts` for services
+6. Example: `createUserAction.action.test.ts`, `searchUsersAction.action.test.ts`
 
 ## Workflow
 
-- **Gather**: Know service name (auth, payment, inventory, analytics, notification) and feature
-- **Execute**: Place file in microservices/ folder with kebab-case name
+- **Gather**: Know service name (users, auth, payment, inventory, analytics, notification) and action name
+- **Check Directory**: Verify `src/services/[serviceName]/__test__/` exists
+- **Create Directory**: If missing, create with: `mkdir -p src/services/[serviceName]/__test__/`
+- **Execute**: Place test file in service's __test__ folder with proper naming
 - **Validate**: File is in correct location and imports work
 
 ## File & tool use
 
-- Read: Look at examples in `src/__tests__/microservices/` for naming pattern
-- Run: None required
-- Prefer: Auto-discovery (orchestrator finds files automatically)
+- Read: Look at examples in `src/services/[serviceName]/__test__/` for naming pattern
+- Bash: Use `mkdir -p src/services/[serviceName]/__test__/` if directory doesn't exist
+- Prefer: Co-location with source files (tests next to actions they test)
 
 ## Guardrails
 
-- Always use kebab-case (auth-login, not auth_login or authLogin)
-- Always place in microservices/ folder (not in examples/)
-- File name = <service>-<feature>, not <service>-<feature>-test
-- Don't create new folders (use microservices/)
+- **ALWAYS** check/create the `__test__` directory before creating test files
+- **ALWAYS** co-locate tests: `src/services/[serviceName]/__test__/`
+- **NEVER** use legacy location: `src/__tests__/microservices/`
+- **ONE** test file per action: `[actionName].action.test.ts`
+- **SAME-LEVEL imports**: Use relative paths: `"../actions"`, `"../_data/userSchema"`
+- **CROSS-DIRECTORY imports**: Use @/ alias: `"@/tests/schemaAllocator"`, `"@/__tests__/shared/testHelpers"` (for generateTestData only)
+- **TYPESCRIPT SAFETY**: Import `type TestContext` and type all parameters: `async ({ db, schemaName }: TestContext)`
+- **REQUIRED IMPORTS**: Always include `import { PrismaClient } from "@prisma/client"`
+- **CLEAN CODE**: Use @/ alias for cross-directory imports, relative for same-level clarity
 
 ## Examples
 
-**Example A**: Auth login test
+**Example A**: User service action test
+
+```
+Service: users
+Action: createUserAction
+Directory: src/services/users/__test__/ (create if missing)
+File: src/services/users/__test__/createUserAction.action.test.ts
+```
+
+**Example B**: User service search action test
+
+```
+Service: users
+Action: searchUsersAction
+Directory: src/services/users/__test__/ (create if missing)
+File: src/services/users/__test__/searchUsersAction.action.test.ts
+```
+
+**Example C**: Auth service action test
 
 ```
 Service: auth
-Feature: login
-File: src/__tests__/microservices/auth-login.test.ts
+Action: loginAction
+Directory: src/services/auth/__test__/ (create if missing)
+File: src/services/auth/__test__/loginAction.action.test.ts
 ```
 
-**Example B**: Payment checkout
+**Example D**: Payment service test
 
 ```
 Service: payment
-Feature: checkout
-File: src/__tests__/microservices/payment-checkout.test.ts
-```
-
-**Example C**: Inventory transfer
-
-```
-Service: inventory
-Feature: transfer
-File: src/__tests__/microservices/inventory-transfer.test.ts
+Action: processPaymentAction
+Directory: src/services/payment/__test__/ (create if missing)
+File: src/services/payment/__test__/processPaymentAction.action.test.ts
 ```
 
 ## Troubleshooting
 
-- **File not discovered by orchestrator** → Check location (must be src/**tests**/microservices/\*.test.ts)
-- **Import errors** → Verify file is in microservices/ folder and imports are correct
-- **Name conflicts** → Check if file already exists; use different feature name
+- **Directory doesn't exist** → Create it with: `mkdir -p src/services/[serviceName]/__test__/`
+- **Module not found errors** → Use @/ alias for cross-directory: `"@/tests/schemaAllocator"` (NOT relative paths)
+- **TypeScript implicit any errors** → Add type annotation: `async ({ db, schemaName }: TestContext)`
+- **Missing PrismaClient** → Add import: `import { PrismaClient } from "@prisma/client"`
+- **Path alias not working** → Verify both `tsconfig.json` and `vitest.config.ts` have `@/` alias configured
+- **Import errors** → Use relative for same-level (`../actions`), @/ for cross-directory (`@/tests/schemaAllocator`)
+- **Name conflicts** → Each action gets its own file: `[actionName].action.test.ts`
+- **Wrong location** → Tests should be next to source files, NOT in src/__tests__/microservices/
+- **Mixed import styles** → Use relative for same-level clarity, @/ for cross-directory consistency
 
 ## Changelog
 
@@ -91,18 +119,34 @@ File: src/__tests__/microservices/inventory-transfer.test.ts
 ## Auto-Discovery Pattern
 
 ```
-src/__tests__/
-├── microservices/              ← Your test files go here
-│   ├── auth-login.test.ts      ← Discovered automatically
-│   ├── auth-mfa.test.ts
-│   ├── payment-checkout.test.ts
-│   ├── inventory-transfer.test.ts
-│   └── ... (all *.test.ts files)
-└── ultimateProductionDemo.test.ts  ← Master orchestrator
-    (discovers and runs all files above)
+src/
+├── services/
+│   ├── users/
+│   │   ├── __test__/                    ← Test files for user service
+│   │   │   ├── createUserAction.action.test.ts
+│   │   │   ├── searchUsersAction.action.test.ts
+│   │   │   └── updateUserAction.action.test.ts
+│   │   ├── actions.ts                  ← Server actions
+│   │   └── _data/                      ← Data layer
+│   │
+│   ├── auth/
+│   │   ├── __test__/                    ← Test files for auth service
+│   │   │   ├── loginAction.action.test.ts
+│   │   │   └── registerAction.action.test.ts
+│   │   ├── actions.ts                  ← Server actions
+│   │   └── _data/                      ← Data layer
+│   │
+│   └── payment/
+│       ├── __test__/                    ← Test files for payment service
+│       │   └── processPaymentAction.action.test.ts
+│       ├── actions.ts                  ← Server actions
+│       └── _data/                      ← Data layer
+│
+└── __tests__/                            ← Legacy location (NO LONGER USED)
+    └── shared/                          ← Shared test utilities only
 ```
 
-**Rule**: Save file in microservices/, orchestrator finds it automatically. No registration needed.
+**Rule**: Tests are CO-LOCATED with source files. Test runner discovers all `src/services/**/__test__/*.test.ts` files automatically. No registration needed.
 getInfrastructure,
 getSchemasByService,
 recordTestExecution,
