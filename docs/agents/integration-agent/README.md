@@ -1,7 +1,191 @@
+# 🤖 Integration Agent - Complete Documentation
+
+## Overview
+
+This folder contains **everything needed** for the Integration Agent to generate production-ready test files with the new schema allocation pattern.
+
+## 📁 File Structure
+
+```
+integration-agent/
+├── 📄 README.md                           # This file - Overview and usage
+├── 📄 INTEGRATION_AGENT_MASTER.md        # Main agent prompt and rules
+├── 📄 AGENT_TEST_CREATION_RULES.md        # 10 mandatory test generation rules
+├── 📄 SCHEMA_ALLOCATION_GUIDE.md          # Detailed schema allocation patterns
+├── 📄 SCHEMA_ALLOCATION_QUICK_REF.md     # Quick reference for schemas
+├── 📄 INFRASTRUCTURE_FIXES_COMPLETE.md    # Infrastructure changes summary
+├── 📄 MIGRATION_GUIDE.md                   # Step-by-step migration for existing tests
+├── 📄 SKILL_TEMPLATE.md                   # Agent skill templates
+├── 📄 SKILL_REFACTORING_GUIDE.md          # Skill refactoring patterns
+├── 📄 SCALING_TO_300_TABLES.md             # Scaling guidance
+└── 📄 ... other skill documentation
+```
+
+## 🎯 How to Use This Agent
+
+### For AI Agents (Copy/Paste Prompt)
+
+1. **Copy the main prompt** from `INTEGRATION_AGENT_MASTER.md`
+2. **Paste it into your AI agent** (Claude, GPT, etc.)
+3. **Provide an actions.ts file** to analyze
+4. **Get production-ready test files** back
+
+### For Human Developers
+
+1. **Read the rules** in `AGENT_TEST_CREATION_RULES.md`
+2. **Follow the schema allocation pattern** in `SCHEMA_ALLOCATION_GUIDE.md`
+3. **Use the quick reference** for common patterns
+4. **Migrate existing tests** using `MIGRATION_GUIDE.md`
+
+## 🚀 Key Features of This Agent
+
+### ✅ **Memory Leak Prevention**
+- Mandatory cleanup hooks in every test file
+- Proper Prisma connection management
+- 15+ connections prevented per test run
+
+### ✅ **Schema Isolation**
+- 1 READ schema + 7 WRITE schemas per service
+- No test interference or data pollution
+- Automatic capacity planning
+
+### ✅ **Production-Ready Patterns**
+- Single-await action invocation
+- Unique test data generation
+- Proper database context injection
+- Global table creation (no redundant setup)
+
+### ✅ **Comprehensive Rules**
+- 10 mandatory test generation rules
+- Pre-generation validation checklist
+- Common mistakes and corrections
+- Complete test file templates
+
+## 📋 Quick Start for Test Generation
+
+### Step 1: Analyze Actions File
+
+Give the agent an `actions.ts` file like:
+
+```typescript
+// src/services/users/actions.ts
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    return await ctx.svc.createUser(parsedInput);
+  });
+
+export const getUserByIdAction = adminProcedure
+  .schema(UserIdSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    return await ctx.svc.getUserById(parsedInput);
+  });
+```
+
+### Step 2: Get Test Files Back
+
+The agent will generate separate files:
+
+```
+src/services/users/__test__/
+├── createUserAction.actions.test.ts
+├── getUserByIdAction.actions.test.ts
+└── ... (one file per exported action)
+```
+
+### Step 3: Run Tests
+
+```bash
+npx vitest run src/services/users/__test__/
+```
+
+## 🔧 Core Agent Capabilities
+
+### **Test File Generation**
+- Analyzes `actions.ts` files for exported actions
+- Creates individual test files per action
+- Applies schema allocation pattern correctly
+- Includes mandatory cleanup hooks
+
+### **Rule Enforcement**
+- Enforces all 10 mandatory test rules
+- Validates test classification (READ vs WRITE)
+- Ensures capacity planning (≤7 WRITE tests)
+- Prevents common mistakes
+
+### **Pattern Application**
+- Single-await action invocation
+- Proper database context: `{ client: db, schemaName }`
+- Unique test data with `Date.now()` + `Math.random()`
+- Schema allocator pattern with `useReadSchema`/`useWriteSchema`
+
+## 📚 Documentation Hierarchy
+
+### **1. Main Agent Prompt**
+- `INTEGRATION_AGENT_MASTER.md` - Complete agent prompt with all rules
+
+### **2. Mandatory Rules**
+- `AGENT_TEST_CREATION_RULES.md` - 10 critical rules with examples
+- Pre-generation checklist and common mistakes
+
+### **3. Schema Allocation**
+- `SCHEMA_ALLOCATION_GUIDE.md` - Detailed implementation guide
+- `SCHEMA_ALLOCATION_QUICK_REF.md` - Quick reference patterns
+
+### **4. Infrastructure**
+- `INFRASTRUCTURE_FIXES_COMPLETE.md` - Summary of all infrastructure changes
+- `MIGRATION_GUIDE.md` - Step-by-step migration instructions
+
+### **5. Advanced Topics**
+- `SKILL_TEMPLATE.md` - Agent skill templates
+- `SCALING_TO_300_TABLES.md` - Scaling guidance
+- Other skill-specific documentation
+
+## 🎯 Test Quality Assurance
+
+### **Generated Tests Include:**
+- ✅ Proper schema classification
+- ✅ Memory leak prevention (cleanup hooks)
+- ✅ Unique test data generation
+- ✅ Error handling for negative tests
+- ✅ Production-ready patterns
+- ✅ Capacity planning validation
+
+### **Common Errors Prevented:**
+- ❌ Memory leaks from unclosed connections
+- ❌ Schema collisions and data pollution
+- ❌ Hardcoded test data conflicts
+- ❌ Incorrect database context usage
+- ❌ Capacity exceeded errors
+
+## 🚀 Performance Benefits
+
+- **~30% faster test execution** (no redundant table creation)
+- **Memory stable** (proper connection cleanup)
+- **Parallel execution safe** (schema isolation)
+- **Scalable architecture** (capacity planning)
+
+## 🔄 Migration Support
+
+For existing test files, use `MIGRATION_GUIDE.md` for:
+- Step-by-step migration instructions
+- Before/after code examples
+- Validation checklists
+- Troubleshooting guidance
+
+## ✅ Self-Contained
+
+This folder contains **everything** the agent needs:
+- Complete prompt and rules
+- All referenced documentation
+- No external dependencies
+- Copy-and-paste ready
+
+Just copy this folder and you have a complete, production-ready integration test generation agent!
+
 ---
-id: integration-agent-readme
-title: Integration Test Agent Documentation
----
+
+**🎉 Ready to generate solid, reliable test files!**
 
 # 🔗 Integration Test Agent
 

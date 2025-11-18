@@ -36,17 +36,30 @@ let infrastructure: TestInfrastructure | null = null;
 let initializationPromise: Promise<TestInfrastructure> | null = null;
 
 // Infrastructure constants
-export const CONTAINER_COUNT = 5;
-export const SCHEMAS_PER_CONTAINER = 4;
-export const TOTAL_SCHEMAS = CONTAINER_COUNT * SCHEMAS_PER_CONTAINER;
+// With 6 worker threads, we create 2 containers per thread = 12 containers total
+// Each container has 8 schemas (1 READ + 7 WRITE)
+// This allows 6 test files to run in parallel, each with 2 containers (16 schemas)
+export const MAX_WORKER_THREADS = 6;
+export const CONTAINERS_PER_THREAD = 2;
+export const CONTAINER_COUNT = MAX_WORKER_THREADS * CONTAINERS_PER_THREAD; // 12 containers
+export const SCHEMAS_PER_CONTAINER = 8;
+export const TOTAL_SCHEMAS = CONTAINER_COUNT * SCHEMAS_PER_CONTAINER; // 96 schemas
 
 // Service and environment configuration
+// With 12 containers, we cycle through these services
 export const SERVICES = [
   "auth",
+  "users",
   "payment",
   "inventory",
   "analytics",
   "notification",
+  "orders",
+  "shipping",
+  "notifications",
+  "reporting",
+  "billing",
+  "audit",
 ];
 
 export const ENVIRONMENTS = [
@@ -237,6 +250,18 @@ export async function initializeInfrastructure(): Promise<TestInfrastructure> {
             metric_value DECIMAL(10,2) NOT NULL,
             test_file VARCHAR(200) NOT NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+          // Create user table for user service tests
+          await prisma.$executeRawUnsafe(`
+          CREATE TABLE "${schemaName}".user (
+            id SERIAL PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            "isActive" BOOLEAN DEFAULT true,
+            "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           )
         `);
 

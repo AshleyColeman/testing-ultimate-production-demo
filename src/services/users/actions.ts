@@ -1,15 +1,16 @@
-'use server';
+"use server";
 
-import { z } from 'zod';
+import { z } from "zod";
 
 import {
   CreateUserSchema,
   UpdateUserSchema,
   UserIdSchema,
+  UserIdActionSchema,
   UserFiltersSchema,
-} from './_data/userSchema';
-import { userService } from './_data/userService';
-import type { ServerCtxType } from '../../lib/utils/types';
+} from "./_data/userSchema";
+import { userService } from "./_data/userService";
+import type { ServerCtxType } from "../../lib/utils/types";
 
 /**
  * Admin Procedure
@@ -19,7 +20,7 @@ import type { ServerCtxType } from '../../lib/utils/types';
  */
 const adminProcedure = {
   schema: <T extends z.ZodSchema>(schema: T) => ({
-    action: async (
+    action: (
       handler: (args: {
         ctx: { svc: ReturnType<typeof userService> };
         parsedInput: z.infer<T>;
@@ -35,7 +36,7 @@ const adminProcedure = {
         // Build server context
         const serverCtx: ServerCtxType = {
           accountUserId: 1,
-          userRole: 'admin',
+          userRole: "admin",
           database,
         };
 
@@ -52,14 +53,13 @@ const adminProcedure = {
   }),
 };
 
-
 /**
  * Get a user by ID
  */
 export const getUserByIdAction = adminProcedure
-  .schema(UserIdSchema)
-  .action(async ({ ctx, parsedInput: userId }) => {
-    const result = await ctx.svc.getUserById(userId);
+  .schema(UserIdActionSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.getUserById(parsedInput.userId);
     return { result };
   });
 
@@ -79,10 +79,12 @@ export const getAllUsersAction = adminProcedure
 export const createUserAction = adminProcedure
   .schema(CreateUserSchema)
   .action(async ({ ctx, parsedInput }) => {
-    const result = await ctx.svc.createUser(parsedInput);
+    const serviceResponse = await ctx.svc.createUser(parsedInput);
     return {
-      result,
-      message: 'Successfully created user',
+      result: serviceResponse.data,
+      message: serviceResponse.message || "Successfully created user",
+      success: serviceResponse.success,
+      errors: serviceResponse.errors,
     };
   });
 
@@ -93,10 +95,12 @@ export const updateUserAction = adminProcedure
   .schema(UpdateUserSchema.merge(z.object({ id: UserIdSchema })))
   .action(async ({ ctx, parsedInput }) => {
     const { id, ...updateData } = parsedInput;
-    const result = await ctx.svc.updateUser(id, updateData);
+    const serviceResponse = await ctx.svc.updateUser(id, updateData);
     return {
-      result,
-      message: 'Successfully updated user',
+      result: serviceResponse.data,
+      message: serviceResponse.message || "Successfully updated user",
+      success: serviceResponse.success,
+      errors: serviceResponse.errors,
     };
   });
 
@@ -104,12 +108,12 @@ export const updateUserAction = adminProcedure
  * Delete a user
  */
 export const deleteUserAction = adminProcedure
-  .schema(UserIdSchema)
-  .action(async ({ ctx, parsedInput: userId }) => {
-    const result = await ctx.svc.deleteUser(userId);
+  .schema(UserIdActionSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const result = await ctx.svc.deleteUser(parsedInput.userId);
     return {
       result,
-      message: 'Successfully deleted user',
+      message: "Successfully deleted user",
     };
   });
 

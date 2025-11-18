@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 
 // Action imports - Using relative paths
 import {
@@ -10,99 +10,74 @@ import {
   searchUsersAction,
 } from "../../services/users/actions";
 
-// Infrastructure imports
-import {
-  getInfrastructure,
-  getSchemasByService,
-  recordTestExecution,
-} from "../shared/testInfrastructure";
+// Schema allocator - NEW PATTERN
+import { createSchemaAllocator } from "../../../tests/schemaAllocator";
 
 // Helper imports
 import { simulateProductionOperation } from "../shared/testHelpers";
 
-import type { PrismaClient } from "@prisma/client";
-
 /**
- * 🧪 USER ACTIONS INTEGRATION TEST
+ * 🧪 USER ACTIONS INTEGRATION TEST (Schema Allocator Pattern)
  *
  * Tests all 6 server actions with validation, authorization, and service orchestration.
  * Following Inter-Train pattern: Actions → Services → Providers → Database
  *
+ * SCHEMA ALLOCATION STRATEGY:
+ * - READ tests (fail scenarios only) → Share ONE schema (3 tests)
+ * - WRITE tests (create, update, delete, list, search) → Each gets UNIQUE schema (7 tests)
+ *
+ * NOTE: Tests that create data before reading are classified as WRITE tests
+ * to ensure proper isolation, even if they primarily perform read operations.
+ *
  * Actions tested:
- * - getUserByIdAction (READ single)
- * - getAllUsersAction (READ all with pagination)
- * - createUserAction (CREATE)
- * - updateUserAction (UPDATE)
- * - deleteUserAction (DELETE)
- * - searchUsersAction (SEARCH with filters)
+ * - createUserAction (CREATE - 2 tests: success + duplicate)
+ * - getUserByIdAction (READ - 2 tests: success requires write, fail is pure read)
+ * - updateUserAction (UPDATE - 2 tests: success is write, fail is pure read)
+ * - deleteUserAction (DELETE - 2 tests: success is write, fail is pure read)
+ * - getAllUsersAction (LIST - 1 test: requires write to create test data)
+ * - searchUsersAction (SEARCH - 1 test: requires write to create test data)
  */
 
+// Create schema allocator for 'users' service
+const { useReadSchema, useWriteSchema } = createSchemaAllocator("users");
+
 describe("User Actions Integration Tests", () => {
-  let testSchema: { prisma: PrismaClient; schemaName: string };
-  let infra: any;
-
+  // Setup users table in all schemas before tests run
   beforeAll(async () => {
-    // Get shared infrastructure
-    infra = await getInfrastructure();
-
-    // Select random schema for this test
-    const schemas = await getSchemasByService("auth");
-    testSchema = schemas[Math.floor(Math.random() * schemas.length)];
-
-    // Ensure users table exists with correct schema
-    await testSchema.prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "${testSchema.schemaName}".users (
-        id VARCHAR(255) PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        name VARCHAR(100) NOT NULL,
-        "isActive" BOOLEAN DEFAULT true,
-        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    infra.logger.log(
-      `[User Actions Test] Using schema: ${testSchema.schemaName}`
-    );
+    // This will be handled per-test by the schema allocator
+    // Each test gets its schema via useReadSchema or useWriteSchema
   });
 
-  afterAll(async () => {
-    // Cleanup: Remove test data
-    if (testSchema?.prisma) {
-      await testSchema.prisma.$executeRawUnsafe(
-        `TRUNCATE TABLE "${testSchema.schemaName}".users CASCADE`
+  it(
+    "[Test 1/10] CREATE - Successfully create user with valid data",
+    useWriteSchema(async ({ db, schemaName }) => {
+      console.log(`✏️  WRITE: Creating user on schema: ${schemaName}`);
+
+      // Ensure users table exists
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".user (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          "isActive" BOOLEAN DEFAULT true,
+          "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // DEBUG: Verify search_path and table
+      const searchPathCheck = await db.$queryRaw`SHOW search_path`;
+      console.log(`🔍 TEST: search_path:`, searchPathCheck);
+      const tableCheck = await db.$queryRawUnsafe(`
+        SELECT COUNT(*) FROM information_schema.tables 
+        WHERE table_schema = '${schemaName}' AND table_name = 'user'
+      `);
+      console.log(`🔍 TEST: Table 'user' in ${schemaName}:`, tableCheck);
+      console.log(
+        `🔍 TEST: Passing db to action, db is PrismaClient:`,
+        db.constructor.name
       );
-    }
-  });
 
-  /**
-   * Helper function to execute user action tests with proper error handling and metrics
-   */
-  async function executeUserActionTest(
-    testName: string,
-    testFn: () => Promise<void>
-  ): Promise<void> {
-    const startTime = Date.now();
-
-    try {
-      await testFn();
-
-      const duration = Date.now() - startTime;
-      await recordTestExecution("user-actions", testName, "success", duration, {
-        schema: testSchema.schemaName,
-      });
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      await recordTestExecution("user-actions", testName, "failure", duration, {
-        schema: testSchema.schemaName,
-        error: (error as Error).message,
-      });
-      throw error;
-    }
-  }
-
-  it("[Test 1/10] CREATE - Successfully create user with valid data", async () => {
-    await executeUserActionTest("Create user with valid data", async () => {
       // Generate unique test data to avoid conflicts
       const uniqueEmail = `test_${Date.now()}_${Math.random()
         .toString(36)
@@ -118,13 +93,13 @@ describe("User Actions Integration Tests", () => {
       )({
         email: uniqueEmail,
         name: uniqueName,
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       });
 
       // Verify result structure
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
-      expect(result.message).toBe("Successfully created user");
+      expect(result.message).toBe("User created successfully");
 
       // Verify user data
       expect(result.result.email).toBe(uniqueEmail);
@@ -135,54 +110,91 @@ describe("User Actions Integration Tests", () => {
       // Verify timing
       expect(executionTime).toBeGreaterThan(0);
       expect(executionTime).toBeLessThan(12000);
-    });
-  });
 
-  it("[Test 2/10] CREATE - Fail with duplicate email constraint", async () => {
-    await executeUserActionTest(
-      "Create user with duplicate email",
-      async () => {
-        // Create first user
-        const uniqueEmail = `duplicate_${Date.now()}@example.com`;
+      console.log(
+        `✅ WRITE completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
 
+  it(
+    "[Test 2/10] CREATE - Fail with duplicate email constraint",
+    useWriteSchema(async ({ db, schemaName }) => {
+      console.log(
+        `✏️  WRITE: Testing duplicate email on schema: ${schemaName}`
+      );
+
+      // Ensure users table exists
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".user (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          "isActive" BOOLEAN DEFAULT true,
+          "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create first user
+      const uniqueEmail = `duplicate_${Date.now()}@example.com`;
+
+      await (
+        await createUserAction
+      )({
+        email: uniqueEmail,
+        name: "First User",
+        database: { client: db, schemaName },
+      });
+
+      // Simulate production delay
+      const executionTime = await simulateProductionOperation();
+
+      // Attempt to create duplicate user
+      try {
         await (
           await createUserAction
         )({
           email: uniqueEmail,
-          name: "First User",
-          database: testSchema.prisma,
+          name: "Second User",
+          database: { client: db, schemaName },
         });
 
-        // Simulate production delay
-        await simulateProductionOperation();
+        expect.fail("Should have thrown unique constraint error");
+      } catch (error) {
+        expect(error).toBeDefined();
 
-        // Attempt to create duplicate user
-        try {
-          await (
-            await createUserAction
-          )({
-            email: uniqueEmail,
-            name: "Second User",
-            database: testSchema.prisma,
-          });
-
-          expect.fail("Should have thrown unique constraint error");
-        } catch (error) {
-          expect(error).toBeDefined();
-
-          // PostgreSQL unique constraint violation (P2002)
-          if (typeof error === "object" && error !== null && "code" in error) {
-            expect(error.code).toBe("P2002");
-          } else if (error instanceof Error) {
-            expect(error.message).toMatch(/unique|duplicate|constraint/i);
-          }
+        // PostgreSQL unique constraint violation (P2002)
+        if (typeof error === "object" && error !== null && "code" in error) {
+          expect(error.code).toBe("P2002");
+        } else if (error instanceof Error) {
+          expect(error.message).toMatch(/unique|duplicate|constraint/i);
         }
       }
-    );
-  });
 
-  it("[Test 3/10] READ - Get user by ID successfully", async () => {
-    await executeUserActionTest("Get user by ID", async () => {
+      console.log(
+        `✅ WRITE completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
+
+  it(
+    "[Test 3/10] READ - Get user by ID successfully",
+    useWriteSchema(async ({ db, schemaName }) => {
+      console.log(`✏️  WRITE: Getting user by ID on schema: ${schemaName}`);
+
+      // Ensure users table exists
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".user (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          "isActive" BOOLEAN DEFAULT true,
+          "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       // Create test user first
       const uniqueEmail = `get_by_id_${Date.now()}@example.com`;
       const created = await (
@@ -190,7 +202,7 @@ describe("User Actions Integration Tests", () => {
       )({
         email: uniqueEmail,
         name: "Get By ID Test",
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       });
 
       const userId = created.result.id;
@@ -203,7 +215,7 @@ describe("User Actions Integration Tests", () => {
         await getUserByIdAction
       )({
         userId,
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       } as any);
 
       // Verify result
@@ -216,15 +228,24 @@ describe("User Actions Integration Tests", () => {
       // Verify timing
       expect(executionTime).toBeGreaterThan(0);
       expect(executionTime).toBeLessThan(12000);
-    });
-  });
 
-  it("[Test 4/10] READ - Fail to get non-existent user (P2025)", async () => {
-    await executeUserActionTest("Get non-existent user", async () => {
+      console.log(
+        `✅ WRITE completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
+
+  it(
+    "[Test 4/10] READ - Fail to get non-existent user (P2025)",
+    useReadSchema(async ({ db, schemaName }) => {
+      console.log(
+        `📖 READ: Testing non-existent user on schema: ${schemaName}`
+      );
+
       const nonExistentId = `usr_nonexistent_${Date.now()}`;
 
       // Simulate production delay
-      await simulateProductionOperation();
+      const executionTime = await simulateProductionOperation();
 
       // Attempt to get non-existent user
       try {
@@ -232,7 +253,7 @@ describe("User Actions Integration Tests", () => {
           await getUserByIdAction
         )({
           userId: nonExistentId,
-          database: testSchema.prisma,
+          database: { client: db, schemaName },
         } as any);
 
         expect.fail("Should have thrown not found error");
@@ -246,11 +267,30 @@ describe("User Actions Integration Tests", () => {
           expect(error.message).toMatch(/not found|doesn't exist/i);
         }
       }
-    });
-  });
 
-  it("[Test 5/10] UPDATE - Successfully update user with valid data", async () => {
-    await executeUserActionTest("Update user with valid data", async () => {
+      console.log(
+        `✅ READ completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
+
+  it(
+    "[Test 5/10] UPDATE - Successfully update user with valid data",
+    useWriteSchema(async ({ db, schemaName }) => {
+      console.log(`✏️  WRITE: Updating user on schema: ${schemaName}`);
+
+      // Ensure users table exists
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".user (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          "isActive" BOOLEAN DEFAULT true,
+          "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       // Create test user first
       const uniqueEmail = `update_${Date.now()}@example.com`;
       const created = await (
@@ -258,7 +298,7 @@ describe("User Actions Integration Tests", () => {
       )({
         email: uniqueEmail,
         name: "Original Name",
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       });
 
       const userId = created.result.id;
@@ -274,13 +314,13 @@ describe("User Actions Integration Tests", () => {
         id: userId,
         name: updatedName,
         isActive: false,
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       } as any);
 
       // Verify result
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
-      expect(result.message).toBe("Successfully updated user");
+      expect(result.message).toBe("User updated successfully");
       expect(result.result.id).toBe(userId);
       expect(result.result.name).toBe(updatedName);
       expect(result.result.isActive).toBe(false);
@@ -288,15 +328,24 @@ describe("User Actions Integration Tests", () => {
       // Verify timing
       expect(executionTime).toBeGreaterThan(0);
       expect(executionTime).toBeLessThan(12000);
-    });
-  });
 
-  it("[Test 6/10] UPDATE - Fail to update non-existent user (P2025)", async () => {
-    await executeUserActionTest("Update non-existent user", async () => {
+      console.log(
+        `✅ WRITE completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
+
+  it(
+    "[Test 6/10] UPDATE - Fail to update non-existent user (P2025)",
+    useReadSchema(async ({ db, schemaName }) => {
+      console.log(
+        `📖 READ: Testing update non-existent user on schema: ${schemaName}`
+      );
+
       const nonExistentId = `usr_nonexistent_${Date.now()}`;
 
       // Simulate production delay
-      await simulateProductionOperation();
+      const executionTime = await simulateProductionOperation();
 
       // Attempt to update non-existent user
       try {
@@ -305,7 +354,7 @@ describe("User Actions Integration Tests", () => {
         )({
           id: nonExistentId,
           name: "Should Fail",
-          database: testSchema.prisma,
+          database: { client: db, schemaName },
         } as any);
 
         expect.fail("Should have thrown not found error");
@@ -319,19 +368,38 @@ describe("User Actions Integration Tests", () => {
           expect(error.message).toMatch(/not found|doesn't exist/i);
         }
       }
-    });
-  });
 
-  it("[Test 7/10] DELETE - Successfully delete user", async () => {
-    await executeUserActionTest("Delete user successfully", async () => {
-      // Create test user first
-      const uniqueEmail = `delete_${Date.now()}@example.com`;
+      console.log(
+        `✅ READ completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
+
+  it(
+    "[Test 7/10] DELETE - Successfully delete user",
+    useWriteSchema(async ({ db, schemaName }) => {
+      console.log(`✏️  WRITE: Deleting user on schema: ${schemaName}`);
+
+      // Ensure users table exists (matching Prisma schema)
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".user (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          "isActive" BOOLEAN DEFAULT true,
+          "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Generate unique test data to avoid conflicts
+      const uniqueEmail = `soft_delete_${Date.now()}@example.com`;
       const created = await (
         await createUserAction
       )({
         email: uniqueEmail,
         name: "To Be Deleted",
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       });
 
       const userId = created.result.id;
@@ -344,7 +412,7 @@ describe("User Actions Integration Tests", () => {
         await deleteUserAction
       )({
         userId,
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       } as any);
 
       // Verify result
@@ -358,7 +426,7 @@ describe("User Actions Integration Tests", () => {
           await getUserByIdAction
         )({
           userId,
-          database: testSchema.prisma,
+          database: { client: db, schemaName },
         } as any);
         expect.fail("User should have been deleted");
       } catch (error) {
@@ -369,15 +437,24 @@ describe("User Actions Integration Tests", () => {
       // Verify timing
       expect(executionTime).toBeGreaterThan(0);
       expect(executionTime).toBeLessThan(12000);
-    });
-  });
 
-  it("[Test 8/10] DELETE - Fail to delete non-existent user (P2025)", async () => {
-    await executeUserActionTest("Delete non-existent user", async () => {
+      console.log(
+        `✅ WRITE completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
+
+  it(
+    "[Test 8/10] DELETE - Fail to delete non-existent user (P2025)",
+    useReadSchema(async ({ db, schemaName }) => {
+      console.log(
+        `📖 READ: Testing delete non-existent user on schema: ${schemaName}`
+      );
+
       const nonExistentId = `usr_nonexistent_${Date.now()}`;
 
       // Simulate production delay
-      await simulateProductionOperation();
+      const executionTime = await simulateProductionOperation();
 
       // Attempt to delete non-existent user
       try {
@@ -385,7 +462,7 @@ describe("User Actions Integration Tests", () => {
           await deleteUserAction
         )({
           userId: nonExistentId,
-          database: testSchema.prisma,
+          database: { client: db, schemaName },
         } as any);
 
         expect.fail("Should have thrown not found error");
@@ -399,11 +476,32 @@ describe("User Actions Integration Tests", () => {
           expect(error.message).toMatch(/not found|doesn't exist/i);
         }
       }
-    });
-  });
 
-  it("[Test 9/10] LIST - Get all users with pagination", async () => {
-    await executeUserActionTest("Get all users with pagination", async () => {
+      console.log(
+        `✅ READ completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
+
+  it(
+    "[Test 9/10] LIST - Get all users with pagination",
+    useWriteSchema(async ({ db, schemaName }) => {
+      console.log(
+        `✏️  WRITE: Listing users with pagination on schema: ${schemaName}`
+      );
+
+      // Ensure users table exists
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".user (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          "isActive" BOOLEAN DEFAULT true,
+          "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       // Create multiple test users
       const baseEmail = `list_${Date.now()}`;
       await (
@@ -411,21 +509,21 @@ describe("User Actions Integration Tests", () => {
       )({
         email: `${baseEmail}_1@example.com`,
         name: "User 1",
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       });
       await (
         await createUserAction
       )({
         email: `${baseEmail}_2@example.com`,
         name: "User 2",
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       });
       await (
         await createUserAction
       )({
         email: `${baseEmail}_3@example.com`,
         name: "User 3",
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       });
 
       // Simulate production delay
@@ -439,23 +537,43 @@ describe("User Actions Integration Tests", () => {
         limit: 10,
         sortBy: "createdAt",
         sortOrder: "desc",
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       } as any);
 
-      // Verify result
+      // Verify result (getAllUsers returns PaginatedResponse)
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
-      expect(Array.isArray(result.result)).toBe(true);
-      expect(result.result.length).toBeGreaterThanOrEqual(3);
+      expect(result.result.data).toBeDefined();
+      expect(Array.isArray(result.result.data)).toBe(true);
+      expect(result.result.data.length).toBeGreaterThanOrEqual(3);
 
       // Verify timing
       expect(executionTime).toBeGreaterThan(0);
       expect(executionTime).toBeLessThan(12000);
-    });
-  });
 
-  it("[Test 10/10] SEARCH - Search users with filters", async () => {
-    await executeUserActionTest("Search users with filters", async () => {
+      console.log(
+        `✅ WRITE completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
+
+  it(
+    "[Test 10/10] SEARCH - Search users with filters",
+    useWriteSchema(async ({ db, schemaName }) => {
+      console.log(`✏️  WRITE: Searching users on schema: ${schemaName}`);
+
+      // Ensure users table exists
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".user (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          "isActive" BOOLEAN DEFAULT true,
+          "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       // Create test users with searchable data
       const searchTerm = `search_${Date.now()}`;
       await (
@@ -463,14 +581,14 @@ describe("User Actions Integration Tests", () => {
       )({
         email: `${searchTerm}_alpha@example.com`,
         name: `${searchTerm} Alpha User`,
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       });
       await (
         await createUserAction
       )({
         email: `${searchTerm}_beta@example.com`,
         name: `${searchTerm} Beta User`,
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       });
 
       // Simulate production delay
@@ -485,17 +603,18 @@ describe("User Actions Integration Tests", () => {
         limit: 10,
         sortBy: "name",
         sortOrder: "asc",
-        database: testSchema.prisma,
+        database: { client: db, schemaName },
       } as any);
 
-      // Verify result
+      // Verify result (searchUsers returns PaginatedResponse)
       expect(result).toBeDefined();
       expect(result.result).toBeDefined();
-      expect(Array.isArray(result.result)).toBe(true);
-      expect(result.result.length).toBeGreaterThanOrEqual(2);
+      expect(result.result.data).toBeDefined();
+      expect(Array.isArray(result.result.data)).toBe(true);
+      expect(result.result.data.length).toBeGreaterThanOrEqual(2);
 
       // Verify search filtering worked
-      result.result.forEach((user: any) => {
+      result.result.data.forEach((user: any) => {
         const matchesSearch =
           user.email.includes(searchTerm) || user.name.includes(searchTerm);
         expect(matchesSearch).toBe(true);
@@ -504,6 +623,10 @@ describe("User Actions Integration Tests", () => {
       // Verify timing
       expect(executionTime).toBeGreaterThan(0);
       expect(executionTime).toBeLessThan(12000);
-    });
-  });
+
+      console.log(
+        `✅ WRITE completed in ${executionTime}ms (schema: ${schemaName})`
+      );
+    })
+  );
 });

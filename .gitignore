@@ -111,3 +111,5 @@ build/
 # Test artifacts
 test-results/
 playwright-report/
+
+tests/.vitest-infra.json

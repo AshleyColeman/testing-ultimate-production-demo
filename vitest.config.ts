@@ -12,11 +12,15 @@ export default defineConfig({
     pool: "forks",
     poolOptions: {
       forks: {
-        singleFork: false,
+        singleFork: false, // Allow parallel execution
         minForks: 1,
-        maxForks: 10,
+        maxForks: 6, // Run up to 6 test files in parallel
       },
     },
+    // 🌍 Global setup - runs ONCE across all workers
+    globalSetup: ["./tests/globalSetup.ts"],
+    // 🌍 Setup file - runs in each worker thread
+    setupFiles: ["./tests/setupFile.ts"],
     include: ["src/**/*.test.ts", "src/**/*.spec.ts"],
     exclude: ["node_modules", "dist", ".git"],
     reporters: ["verbose"],
@@ -24,6 +28,7 @@ export default defineConfig({
     sequence: {
       setupFiles: "list",
       hooks: "list",
+      concurrent: false, // Keep deterministic for schema allocation
     },
     coverage: {
       provider: "v8",

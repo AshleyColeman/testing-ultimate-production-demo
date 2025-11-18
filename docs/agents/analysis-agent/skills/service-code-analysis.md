@@ -14,6 +14,7 @@ Deep analysis of service class structure, methods, business logic, and code patt
 - Before any database schema detection
 - Before any method-specific analysis
 - Anytime you need to understand service purpose
+- For both traditional service files AND Next.js action files
 
 ---
 
@@ -59,33 +60,44 @@ return createServiceAnalysisReport(analysis);
 
 ```typescript
 interface ServiceMetadata {
-  name: string; // e.g., "UserService"
-  purpose: string; // e.g., "Manages user CRUD operations"
-  location: string; // e.g., "src/services/UserService.ts"
-  pattern: "Prisma" | "Raw SQL" | "Mixed" | "ORM";
+  name: string; // e.g., "UserService" or "users actions"
+  purpose: string; // e.g., "Manages user CRUD operations" or "User actions for Next.js"
+  location: string; // e.g., "src/services/UserService.ts" or "src/services/users/actions.ts"
+  type: "Service" | "Action File"; // NEW: Distinguish between services and action files
+  pattern: "Prisma" | "Raw SQL" | "Mixed" | "ORM" | "Service Layer"; // NEW: Service layer for action files
 }
 ```
 
 **How to identify pattern**:
 
 ```typescript
-// Look for:
+// For Traditional Services:
 if (code.includes('prisma.')) → 'Prisma'
 if (code.includes('$queryRaw') || code.includes('$executeRaw')) → 'Raw SQL'
 if (code.includes('prisma.') && code.includes('$queryRaw')) → 'Mixed'
 if (code.includes('@Entity') || code.includes('TypeORM')) → 'ORM'
+
+// For Action Files (NEW):
+if (code.includes('adminProcedure')) → 'Service Layer' (action file)
+if (code.includes('.action(')) → 'Service Layer' (action file)
+if (code.includes('ctx.svc')) → 'Service Layer' (action file)
+
+// File-based detection:
+if (fileName.includes('actions.ts')) → 'Action File'
+if (fileName.includes('/actions/')) → 'Action File'
 ```
 
 ### Step 3: Extract All Methods
 
 ```typescript
 interface MethodSignature {
-  name: string; // e.g., "createUser"
-  visibility: "public" | "private" | "protected";
+  name: string; // e.g., "createUser" or "createUserAction"
+  visibility: "public" | "private" | "protected" | "exported"; // NEW: exported for action files
   isAsync: boolean;
   parameters: Parameter[];
   returnType: string;
   jsdocComment?: string;
+  methodType: "service" | "action"; // NEW: distinguish method types
 }
 
 interface Parameter {
@@ -94,25 +106,54 @@ interface Parameter {
   optional: boolean;
   defaultValue?: any;
 }
+
+// NEW: For Action Files
+interface ActionMethodSignature extends MethodSignature {
+  validationSchema: string; // e.g., "CreateUserSchema"
+  serviceCall: string;      // e.g., "ctx.svc.createUser"
+  parameterMapping: string; // e.g., "direct" or "destructured"
+}
 ```
 
 **Example extraction**:
 
 ```typescript
-// From code:
+// Traditional Service Method:
 async createUser(input: CreateUserInput): Promise<User> {
   // ...
 }
-
 // Extract:
 {
   name: 'createUser',
+  methodType: 'service',
   visibility: 'public',
   isAsync: true,
   parameters: [
     { name: 'input', type: 'CreateUserInput', optional: false }
   ],
   returnType: 'Promise<User>'
+}
+
+// Action File Method (NEW):
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const serviceResponse = await ctx.svc.createUser(parsedInput);
+    return { result: serviceResponse.data };
+  });
+// Extract:
+{
+  name: 'createUserAction',
+  methodType: 'action',
+  visibility: 'exported',
+  isAsync: true,
+  parameters: [
+    { name: 'parsedInput', type: 'z.infer<typeof CreateUserSchema>', optional: false }
+  ],
+  returnType: 'Promise<{ result: any }>',
+  validationSchema: 'CreateUserSchema',
+  serviceCall: 'ctx.svc.createUser',
+  parameterMapping: 'direct'
 }
 ```
 
@@ -137,7 +178,7 @@ import { databaseService } from '../utils/Database';  → database
 import { logger } from '../utils/Logger';             → utilities
 ```
 
-### Step 5: Analyze Class Structure
+### Step 5: Analyze Class Structure OR Action File Structure
 
 ```typescript
 interface ClassStructure {
@@ -146,6 +187,15 @@ interface ClassStructure {
   hasPrivateMembers: boolean;
   hasStaticMethods: boolean;
   hasLifecycleMethods: boolean; // init(), close(), etc.
+}
+
+// NEW: For Action Files
+interface ActionFileStructure {
+  hasAdminProcedure: boolean;      // Uses adminProcedure wrapper
+  hasSchemaValidation: boolean;    // All actions have schema validation
+  hasServiceContext: boolean;      // Uses ctx.svc pattern
+  hasResponseWrapping: boolean;    // Wraps service responses
+  parameterPattern: "direct" | "destructured" | "transformed";
 }
 ```
 
@@ -345,27 +395,161 @@ export const userService = UserService.getInstance();
 }
 ```
 
+### Example 2: Analyzing User Action File (NEW)
+
+**Action File Code**:
+
+```typescript
+"use server";
+
+import { z } from "zod";
+import { CreateUserSchema, UpdateUserSchema, UserIdSchema } from "./_data/userSchema";
+import { userService } from "./_data/userService";
+import type { ServerCtxType } from "../../lib/utils/types";
+
+const adminProcedure = {
+  schema: <T extends z.ZodSchema>(schema: T) => ({
+    action: (
+      handler: (args: {
+        ctx: { svc: ReturnType<typeof userService> };
+        parsedInput: z.infer<T>;
+      }) => Promise<any>
+    ) => {
+      return async (input: z.infer<T>) => {
+        const parsedInput = schema.parse(input);
+        const database = (input as any)?.database || undefined;
+        const serverCtx: ServerCtxType = {
+          accountUserId: 1,
+          userRole: "admin",
+          database,
+        };
+        const svc = userService(serverCtx);
+        return handler({
+          ctx: { svc },
+          parsedInput,
+        });
+      };
+    },
+  }),
+};
+
+export const createUserAction = adminProcedure
+  .schema(CreateUserSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    const serviceResponse = await ctx.svc.createUser(parsedInput);
+    return {
+      result: serviceResponse.data,
+      message: serviceResponse.message || "Successfully created user",
+      success: serviceResponse.success,
+      errors: serviceResponse.errors,
+    };
+  });
+
+export const updateUserAction = adminProcedure
+  .schema(UpdateUserSchema.merge(z.object({ id: UserIdSchema })))
+  .action(async ({ ctx, parsedInput }) => {
+    const { id, ...updateData } = parsedInput;
+    const serviceResponse = await ctx.svc.updateUser(id, updateData);
+    return {
+      result: serviceResponse.data,
+      message: serviceResponse.message || "Successfully updated user",
+      success: serviceResponse.success,
+      errors: serviceResponse.errors,
+    };
+  });
+```
+
+**Action File Analysis Output**:
+
+```typescript
+{
+  serviceName: "User Actions",
+  purpose: "Next.js server actions for user management with validation and service layer integration",
+  location: "src/services/users/actions.ts",
+  type: "Action File",
+  pattern: "Service Layer",
+
+  exportedMethods: [
+    {
+      name: "createUserAction",
+      methodType: "action",
+      validationSchema: "CreateUserSchema",
+      serviceCall: "ctx.svc.createUser",
+      parameterMapping: "direct",
+      purpose: "Creates user via service with full response wrapping",
+      complexity: "Low-Medium",
+      responseFormat: "full" // result, message, success, errors
+    },
+    {
+      name: "updateUserAction",
+      methodType: "action",
+      validationSchema: "UpdateUserSchema + UserIdSchema",
+      serviceCall: "ctx.svc.updateUser",
+      parameterMapping: "destructured",
+      purpose: "Updates user with ID extraction and response wrapping",
+      complexity: "Medium",
+      responseFormat: "full" // result, message, success, errors
+    }
+  ],
+
+  dependencies: {
+    schemas: ["CreateUserSchema", "UpdateUserSchema", "UserIdSchema"],
+    services: ["userService"],
+    validation: ["zod"],
+    internal: ["adminProcedure"],
+    types: ["ServerCtxType"]
+  },
+
+  structure: {
+    hasAdminProcedure: true,
+    hasSchemaValidation: true,
+    hasServiceContext: true,
+    hasResponseWrapping: true,
+    parameterPattern: "mixed"
+  },
+
+  responsePatterns: {
+    fullWrapper: ["createUserAction", "updateUserAction"],
+    simpleWrapper: [],
+    direct: []
+  },
+
+  patterns: {
+    hasValidation: true,        // Schema validation via zod
+    hasErrorHandling: true,     // Service layer handles errors
+    hasTransactions: false,     // Delegated to service layer
+    hasLogging: false,          // Delegated to service layer
+    hasAuthorization: true,     // adminProcedure provides auth context
+    hasCaching: false
+  }
+}
+```
+
 ---
 
 ## 🔍 ANALYSIS CHECKLIST
 
-When analyzing a service, verify you've captured:
+When analyzing a service OR action file, verify you've captured:
 
-**Service Identity**
+**File Identity (Service or Action File)**
 
-- [ ] Service name extracted
+- [ ] File name extracted
 - [ ] Purpose inferred from code
 - [ ] File location noted
-- [ ] Database pattern detected (Prisma/SQL/ORM)
+- [ ] File type identified (Service vs Action File)
+- [ ] Database/pattern detected (Prisma/SQL/ORM/Service Layer)
 
 **Methods Analysis**
 
-- [ ] All public methods listed
-- [ ] All private methods listed
+- [ ] All public/exported methods listed
+- [ ] All private methods listed (for services)
 - [ ] Method signatures documented
 - [ ] Parameters and types captured
 - [ ] Return types noted
 - [ ] Async/sync identified
+- [ ] For actions: Schema validation identified
+- [ ] For actions: Service calls mapped
+- [ ] For actions: Parameter mapping analyzed
 
 **Dependencies**
 
@@ -373,6 +557,9 @@ When analyzing a service, verify you've captured:
 - [ ] External library dependencies
 - [ ] Database service imports
 - [ ] Utility imports
+- [ ] For actions: Schema dependencies identified
+- [ ] For actions: Service layer imports mapped
+- [ ] For actions: Validation library imports noted
 
 **Patterns**
 
@@ -385,11 +572,14 @@ When analyzing a service, verify you've captured:
 
 **Structure**
 
-- [ ] Constructor analyzed
-- [ ] Singleton pattern detected
-- [ ] Private members identified
-- [ ] Static methods found
-- [ ] Lifecycle methods noted
+- [ ] Constructor analyzed (services)
+- [ ] Singleton pattern detected (services)
+- [ ] Private members identified (services)
+- [ ] Static methods found (services)
+- [ ] Lifecycle methods noted (services)
+- [ ] For actions: adminProcedure pattern identified
+- [ ] For actions: Response wrapping patterns analyzed
+- [ ] For actions: Parameter processing patterns noted
 
 ---
 

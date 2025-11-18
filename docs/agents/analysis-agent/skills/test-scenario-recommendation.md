@@ -14,6 +14,7 @@ Generate intelligent test scenario recommendations based on method analysis, dat
 - After database schema detection
 - After FK analysis
 - Before creating test plan
+- For both traditional services AND Next.js action files
 
 ---
 
@@ -502,6 +503,242 @@ interface DeleteOperationTests {
     "Delete and verify multi-level cascades"
   ];
 }
+```
+
+---
+
+## 🎯 ACTION FILE TEST RECOMMENDATIONS (NEW)
+
+### Action-Specific Test Categories
+
+Action files require different test categories than traditional services:
+
+#### Category 1: Schema Validation Tests (30%)
+
+**What**: Test the adminProcedure schema validation layer
+
+**When to recommend**: All action methods have schema validation
+
+**Examples**:
+
+```typescript
+// For createUserAction with CreateUserSchema:
+1. Valid input passes schema validation ✅
+2. Missing required field fails at schema level ❌
+3. Invalid email format fails at schema level ❌
+4. Schema-level constraints (min/max length) enforced ❌
+5. Schema composition (merge, omit) works correctly ✅
+
+// For updateUserAction with merged schema:
+6. ID validation from UserIdSchema works ❌
+7. Update data validation from UpdateUserSchema works ✅
+8. Schema merge doesn't create conflicts ✅
+```
+
+#### Category 2: Service Integration Tests (25%)
+
+**What**: Test the integration between action and service layer
+
+**When to recommend**: All action methods call service methods
+
+**Examples**:
+
+```typescript
+// For createUserAction → ctx.svc.createUser:
+9. Valid parsedInput passed correctly to service ✅
+10. Service method called with correct parameters ✅
+11. Service response data extracted correctly ✅
+12. Service errors handled/propagated correctly ❌
+
+// For updateUserAction with destructuring:
+13. Parameter destructuring works correctly ✅
+14. ID and updateData separated correctly ✅
+15. Service called with separate parameters ✅
+```
+
+#### Category 3: Response Format Tests (20%)
+
+**What**: Test how action methods wrap/format service responses
+
+**When to recommend**: Most actions have specific response formats
+
+**Examples**:
+
+```typescript
+// For full wrapper actions (createUserAction, updateUserAction):
+16. Response contains result field with service data ✅
+17. Response contains success field (boolean) ✅
+18. Response contains message field (with fallback) ✅
+19. Response contains errors field when applicable ✅
+20. Default messages used when service doesn't provide ✅
+
+// For simple wrapper actions (deleteUserAction):
+21. Response contains result field only ✅
+22. Response contains static success message ✅
+```
+
+#### Category 4: Admin Procedure Context Tests (15%)
+
+**What**: Test the adminProcedure wrapper and context setup
+
+**When to recommend**: All actions use adminProcedure
+
+**Examples**:
+
+```typescript
+// Context and Infrastructure Tests:
+23. Server context created with admin role ✅
+24. Service initialized with correct context ✅
+25. Database context passed to service correctly ✅
+26. Context wrapper doesn't interfere with data ✅
+```
+
+#### Category 5: End-to-End Action Tests (10%)
+
+**What**: Test the complete action flow from input to response
+
+**When to recommend**: Verify complete functionality
+
+**Examples**:
+
+```typescript
+// Complete Flow Tests:
+27. Full success flow: validation → service → response format ✅
+28. Full error flow: schema validation → early return ❌
+29. Full error flow: service error → wrapped error response ❌
+30. Action handles edge cases (optional fields, null values) 🔸
+```
+
+### Action File Test Templates
+
+#### Template for CREATE Actions (e.g., createUserAction)
+
+```typescript
+const createActionTests = {
+  schemaValidation: [
+    "Valid user data passes CreateUserSchema validation",
+    "Missing required field (email) fails schema validation",
+    "Invalid email format fails schema validation",
+    "Name too short fails schema validation"
+  ],
+  serviceIntegration: [
+    "Valid parsedInput passed to ctx.svc.createUser",
+    "Service called with exact parsedInput object",
+    "Service response.data extracted as result",
+    "Service response.message used or default applied",
+    "Service response.success mapped to success field",
+    "Service response.errors mapped to errors field"
+  ],
+  responseFormat: [
+    "Response object has result field with user data",
+    "Response object has success boolean field",
+    "Response object has message string field",
+    "Response object has errors field (array)",
+    "Default message used when service.message is empty"
+  ],
+  contextSetup: [
+    "Admin procedure creates correct server context",
+    "UserService initialized with admin context",
+    "Database context properly passed to service"
+  ],
+  endToEnd: [
+    "Complete successful user creation flow",
+    "Schema validation error stops before service call",
+    "Service error properly wrapped in response format"
+  ]
+};
+```
+
+#### Template for UPDATE Actions (e.g., updateUserAction)
+
+```typescript
+const updateActionTests = {
+  schemaValidation: [
+    "Valid ID + update data passes merged schema validation",
+    "Invalid ID format fails UserIdSchema validation",
+    "Invalid update data fails UpdateUserSchema validation",
+    "Missing ID fails validation (from UserIdSchema)"
+  ],
+  serviceIntegration: [
+    "Parameter destructuring: { id, ...updateData } works",
+    "Service called with updateUser(id, updateData) signature",
+    "Separated parameters match service expectations"
+  ],
+  responseFormat: [
+    "Updated user data returned in result field",
+    "Success message indicates update operation",
+    "Error scenarios return appropriate error format"
+  ],
+  contextSetup: [
+    "Admin context allows user modification",
+    "Service receives proper admin context"
+  ],
+  endToEnd: [
+    "Successful user update with partial data",
+    "Update with only optional fields",
+    "Update failure due to non-existent user ID"
+  ]
+};
+```
+
+#### Template for DELETE Actions (e.g., deleteUserAction)
+
+```typescript
+const deleteActionTests = {
+  schemaValidation: [
+    "Valid user ID passes UserIdActionSchema validation",
+    "Invalid ID format fails validation",
+    "Missing ID fails validation"
+  ],
+  serviceIntegration: [
+    "Field extraction: parsedInput.userId works correctly",
+    "Service called with deleteUser(userId) signature",
+    "Service result returned directly"
+  ],
+  responseFormat: [
+    "Simple response format: { result, message }",
+    "Static success message included",
+    "Service result passed through unchanged"
+  ],
+  contextSetup: [
+    "Admin context allows user deletion",
+    "Service receives deletion permissions"
+  ],
+  endToEnd: [
+    "Successful user deletion flow",
+    "Non-existent user ID handling",
+    "Cascade effects from service layer"
+  ]
+};
+```
+
+### Action File Test Count Guidelines
+
+```typescript
+// For Simple Actions (10 tests):
+interface SimpleActionTests {
+  schemaValidation: 3 tests;    // 30%
+  serviceIntegration: 3 tests;  // 30%
+  responseFormat: 2 tests;      // 20%
+  contextSetup: 1 test;         // 10%
+  endToEnd: 1 test;             // 10%
+}
+
+// For Complex Actions (15-20 tests):
+interface ComplexActionTests {
+  schemaValidation: 4-5 tests;    // 25-30%
+  serviceIntegration: 4-5 tests;  // 25-30%
+  responseFormat: 3-4 tests;      // 20%
+  contextSetup: 2 tests;          // 10-15%
+  endToEnd: 2-3 tests;            // 15-20%
+}
+
+// Complexity indicators for actions:
+- Has schema merging (UpdateUserSchema.merge(...)) → +2 tests
+- Has parameter destructuring → +1 test
+- Has complex response wrapping → +1 test
+- Service method has cascades → +2 tests
+- Multiple response formats in file → +1 test per format type
 ```
 
 ---
