@@ -49,21 +49,17 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
 // Action imports
-import { createUserAction, getUserByIdAction } from '../../services/users/actions';
-import type { CreateUserInput } from '../../services/users/actions';
+import { createUserAction, getUserByIdAction } from '@/services/users/actions';
+import type { CreateUserInput } from '@/services/users/_data/userSchema';
 
 // Infrastructure imports
-import {
-  getInfrastructure,
-  getSchemasByService,
-  recordTestExecution,
-} from '../shared/testInfrastructure';
+import { createSchemaAllocator } from '@/tests/schemaAllocator';
 
 // Helper imports
 import {
   simulateProductionOperation,
   generateTestData,
-} from '../shared/testHelpers';
+} from '@/tests/shared/testHelpers';
 ```
 
 ### Step 2: Mock Service Dependencies
@@ -78,7 +74,7 @@ const mockUserService = {
 };
 
 // Mock service factory
-vi.mock('../../lib/services/serviceFactory', () => ({
+vi.mock('@/lib/services/serviceFactory', () => ({
   serviceFactory: {
     get: vi.fn((serviceName) => {
       switch (serviceName) {

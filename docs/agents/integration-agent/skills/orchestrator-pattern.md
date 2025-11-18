@@ -98,11 +98,13 @@ File: src/services/payment/__test__/processPaymentAction.action.test.ts
 - **Module not found errors** → Use @/ alias for cross-directory: `"@/tests/schemaAllocator"` (NOT relative paths)
 - **TypeScript implicit any errors** → Add type annotation: `async ({ db, schemaName }: TestContext)`
 - **Missing PrismaClient** → Add import: `import { PrismaClient } from "@prisma/client"`
+- **Prisma query type errors** → Type raw queries: `db.$queryRawUnsafe<UserRow[]>(...)` (not untyped)
 - **Path alias not working** → Verify both `tsconfig.json` and `vitest.config.ts` have `@/` alias configured
 - **Import errors** → Use relative for same-level (`../actions`), @/ for cross-directory (`@/tests/schemaAllocator`)
 - **Name conflicts** → Each action gets its own file: `[actionName].action.test.ts`
 - **Wrong location** → Tests should be next to source files, NOT in src/__tests__/microservices/
 - **Mixed import styles** → Use relative for same-level clarity, @/ for cross-directory consistency
+- **Unknown type errors** → Add typing to Prisma queries: `await db.$queryRawUnsafe<UserRow[]>(...)` not `await db.$queryRawUnsafe(...)`
 
 ## Changelog
 

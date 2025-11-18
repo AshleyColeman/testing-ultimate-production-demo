@@ -28,59 +28,59 @@ TypeScript sees: `() => Promise<(input) => Promise<any>>`
 
 ## ✅ Correct Calling Pattern
 
-### **Double Await Pattern**
+### **Single Await Pattern (Updated)**
 
 ```typescript
-// ✅ CORRECT - Two-step process
-const actionHandler = await createUserAction;        // 1st await: Get handler
-const result = await actionHandler(testInput);       // 2nd await: Execute handler
-
-// OR more concise:
-const result = await (await createUserAction)(testInput);
+// ✅ CORRECT - Direct action call (after infrastructure fixes)
+const result = await createUserAction({
+  email: generateUniqueEmail(),
+  name: generateUniqueName(),
+  database: { client: db, schemaName }, // Critical: Database context
+});
 ```
 
 ### **Complete Test Template**
 
 ```typescript
-it("[Test X/10] Description", async () => {
-  await executeUserActionTest("Description", async () => {
-    const testInput = {
-      email: generateUniqueEmail(X),
-      name: generateUniqueName(X),
-      database: schema.prisma, // Critical: Database injection
-    };
+it("Test X/10 CREATE - Description", useWriteSchema(async ({ db, schemaName }) => {
+  const testInput = {
+    email: `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@example.com`,
+    name: `Test User ${Date.now()}`,
+    database: { client: db, schemaName }, // Critical: Database context
+  };
 
-    // ✅ CORRECT: Double await for server actions
-    const actionHandler = await createUserAction;
-    const result = await actionHandler(testInput as any);
+  // ✅ CORRECT: Single await for server actions
+  const result = await createUserAction(testInput);
 
-    expect(result).toBeDefined();
-    expect(result.result).toBeDefined();
-    // ... your assertions here
+  expect(result).toBeDefined();
+  expect(result.result).toBeDefined();
+  expect(result.success).toBe(true);
+  // ... your assertions here
 
-    const executionTime = await simulateProductionOperation();
-    expect(executionTime).toBeGreaterThan(0);
-    expect(executionTime).toBeLessThan(12000);
-
-    return result;
-  });
-});
+  const executionTime = await simulateProductionOperation();
+  expect(executionTime).toBeGreaterThan(0);
+  expect(executionTime).toBeLessThan(12000);
+}));
 ```
 
 ---
 
 ## ❌ Common Mistakes (What NOT to Do)
 
-### **Single Await (TypeScript Error)**
+### **Double Await (Deprecated)**
 ```typescript
-// ❌ WRONG - Causes "This expression is not callable" error
-const result = await createUserAction(testInput);
+// ❌ WRONG - Old pattern, no longer needed
+const actionHandler = await createUserAction;
+const result = await actionHandler(testInput);
 ```
 
-### **No Await (TypeScript Error)**
+### **Missing Database Context**
 ```typescript
-// ❌ WRONG - Causes "This expression is not callable" error  
-const result = createUserAction(testInput);
+// ❌ WRONG - Missing database context
+const result = await createUserAction({
+  email: "test@example.com",
+  name: "Test User",
+});
 ```
 
 ---
@@ -92,8 +92,7 @@ const result = createUserAction(testInput);
 ```typescript
 // ✅ CORRECT: Type-safe error handling
 try {
-  const actionHandler = await createUserAction;
-  const result = await actionHandler(invalidInput as any);
+  const result = await createUserAction(invalidInput);
   expect.fail("Should have thrown validation error");
 } catch (error) {
   expect(error).toBeDefined();

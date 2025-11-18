@@ -94,12 +94,12 @@ describe("Test Suite", () => {
 
 ---
 
-### Rule 3: Table Creation
+### Rule 3: Table Creation - Tables Must Exist
 
-**DO NOT create tables in individual tests**
+**DO NOT create tables in individual tests - Tables must exist or tests fail fast**
 
 ```typescript
-// ❌ WRONG - Wastes time creating table in every test
+// ❌ WRONG - Never create tables in tests
 it(
   "test 1",
   useWriteSchema(async ({ db, schemaName }) => {
@@ -110,27 +110,38 @@ it(
   })
 );
 
+// ❌ WRONG - Don't try to create tables with fallback logic
 it(
   "test 2",
   useWriteSchema(async ({ db, schemaName }) => {
-    await db.$executeRawUnsafe(
-      `CREATE TABLE IF NOT EXISTS "${schemaName}".user (...)`
-    );
+    try {
+      await db.$executeRawUnsafe(`CREATE TABLE...`);
+    } catch (error) {
+      // Don't handle missing tables - let tests fail fast
+    }
     // test logic
   })
 );
 
-// ✅ CORRECT - Tables already exist from testInfrastructure
+// ✅ CORRECT - Tables must exist, fail fast if they don't
 it(
   "test 1",
   useWriteSchema(async ({ db, schemaName }) => {
-    // Just use the table - it already exists
+    // Just use the table - it must exist in test environment
     const result = await db.$queryRawUnsafe(
       `SELECT * FROM "${schemaName}".user`
     );
+    // If table doesn't exist, test should FAIL to highlight setup issues
   })
 );
 ```
+
+**Table Existence Policy:**
+- Tests MUST assume required tables exist
+- If tables are missing, tests should FAIL FAST
+- This ensures proper test environment setup
+- No table creation or recovery logic in tests
+- Missing tables indicate environment setup problems that must be fixed
 
 **Available Tables:**
 
@@ -263,15 +274,19 @@ const { useReadSchema, useWriteSchema, cleanup } =
 
 ### Rule 9: Test Naming Convention
 
-**Include test number and classification**
+**Include test number and classification BUT NO BRACKETS in test descriptions**
 
 ```typescript
-// ✅ CORRECT - Clear, numbered, classified
+// ✅ CORRECT - Clear, numbered, classified, no brackets
+it("Test 1/10 CREATE - Successfully create user", useWriteSchema(...));
+it("Test 2/10 CREATE - Fail with duplicate email", useWriteSchema(...));
+it("Test 3/10 READ - Get user by ID successfully", useWriteSchema(...)); // Note: WRITE because it creates data
+it("Test 4/10 READ - Fail to get non-existent user", useReadSchema(...));
+it("Test 5/10 UPDATE - Successfully update user", useWriteSchema(...));
+
+// ❌ WRONG - Brackets in test description
 it("[Test 1/10] CREATE - Successfully create user", useWriteSchema(...));
 it("[Test 2/10] CREATE - Fail with duplicate email", useWriteSchema(...));
-it("[Test 3/10] READ - Get user by ID successfully", useWriteSchema(...)); // Note: WRITE because it creates data
-it("[Test 4/10] READ - Fail to get non-existent user", useReadSchema(...));
-it("[Test 5/10] UPDATE - Successfully update user", useWriteSchema(...));
 
 // ❌ WRONG - Unclear classification and numbering
 it("create user", useWriteSchema(...));
@@ -315,6 +330,68 @@ it(
 
 ---
 
+### Rule 11: Test File Location (CRITICAL)
+
+**Test files MUST be placed in __test__ directories next to the service being tested**
+
+```typescript
+// ✅ CORRECT - Place test files next to the service being tested
+src/services/users/__test__/createUserAction.test.ts
+src/services/auth/__test__/loginAction.test.ts
+src/services/payment/__test__/processPaymentAction.test.ts
+
+// ❌ WRONG - Never place tests in microservices directory
+src/__tests__/microservices/createUserAction.test.ts  // ← WRONG LOCATION!
+src/__tests__/microservices/user-actions.test.ts      // ← WRONG LOCATION!
+
+// ❌ WRONG - Never create deep nested test structures
+src/services/users/__test__/integration/createUserAction.test.ts  // ← TOO DEEP!
+```
+
+**File Location Strategy:**
+- Test files should be immediately discoverable next to their source code
+- Use `__test__` directory in the same folder as the service files
+- Never use the `src/__tests__/microservices/` directory (reserved for other patterns)
+- This makes it easy to find tests for specific services
+- Maintains close coupling between test and implementation
+
+---
+
+### Rule 12: Import Path Resolution (CRITICAL)
+
+**Always use tsconfig path mapping (@/) for all imports**
+
+```typescript
+// ✅ CORRECT - Use tsconfig path mapping
+import { createSchemaAllocator } from "@/tests/schemaAllocator";
+import { simulateProductionOperation } from "@/tests/shared/testHelpers";
+import { someAction } from "@/services/users/actions";
+
+// ❌ WRONG - Never use relative paths for cross-file imports
+import { createSchemaAllocator } from "../../../tests/schemaAllocator";     // ← WRONG!
+import { simulateProductionOperation } from "../shared/testHelpers";       // ← WRONG!
+import { someAction } from "../../services/users/actions";                // ← WRONG!
+
+// ✅ CORRECT - Local imports can use relative paths
+import type { CreateUserInput } from "./_data/userSchema";               // ← OK (same directory)
+import { userService } from "./_data/userService";                       // ← OK (same directory)
+```
+
+**Import Path Rules:**
+1. **Always use @/ prefix** for imports that cross service boundaries
+2. **Use relative paths** only for files within the same service directory
+3. **Path mapping should match tsconfig.json paths configuration**
+4. **Never use "../" navigation** to reach tests directories
+5. **Follow the established pattern** shown in existing test files
+
+**Why this matters:**
+- Prevents import resolution errors
+- Maintains consistency across the codebase
+- Makes refactoring easier (no fragile relative paths)
+- Leverages TypeScript path mapping for better IDE support
+
+---
+
 ## 📝 Complete Test File Template
 
 ```typescript
@@ -331,8 +408,8 @@ it(
  */
 
 import { describe, it, expect, afterAll } from "vitest";
-import { createSchemaAllocator } from "../../../tests/schemaAllocator";
-import { simulateProductionOperation } from "../shared/testHelpers";
+import { createSchemaAllocator } from "@/tests/schemaAllocator";
+import { simulateProductionOperation } from "@/tests/shared/testHelpers";
 
 // Import actions being tested
 import {
@@ -351,7 +428,7 @@ describe("[Service Name] Integration Tests", () => {
    * READ TEST - Pure read operation
    */
   it(
-    "[Test 1/N] READ - Get something by ID (fail case)",
+    "Test 1/N READ - Get something by ID (fail case)",
     useReadSchema(async ({ db, schemaName }) => {
       console.log(
         `📖 READ: Testing non-existent record on schema: ${schemaName}`
@@ -381,7 +458,7 @@ describe("[Service Name] Integration Tests", () => {
    * WRITE TEST - Creates data (mutation)
    */
   it(
-    "[Test 2/N] CREATE - Successfully create record",
+    "Test 2/N CREATE - Successfully create record",
     useWriteSchema(async ({ db, schemaName }) => {
       console.log(`✏️  WRITE: Creating record on schema: ${schemaName}`);
 
@@ -413,7 +490,7 @@ describe("[Service Name] Integration Tests", () => {
    * WRITE TEST - Updates data (mutation)
    */
   it(
-    "[Test 3/N] UPDATE - Successfully update record",
+    "Test 3/N UPDATE - Successfully update record",
     useWriteSchema(async ({ db, schemaName }) => {
       console.log(`✏️  WRITE: Updating record on schema: ${schemaName}`);
 
@@ -450,7 +527,7 @@ describe("[Service Name] Integration Tests", () => {
    * WRITE TEST - Deletes data (mutation)
    */
   it(
-    "[Test 4/N] DELETE - Successfully delete record",
+    "Test 4/N DELETE - Successfully delete record",
     useWriteSchema(async ({ db, schemaName }) => {
       console.log(`✏️  WRITE: Deleting record on schema: ${schemaName}`);
 
@@ -515,7 +592,10 @@ Before generating a test file, verify:
 - [ ] **All action calls include database parameter** (`database: { client: db, schemaName }`)
 - [ ] **Test data uses unique identifiers** (`Date.now()` + `Math.random()`)
 - [ ] **No table creation in tests** (tables exist from infrastructure)
-- [ ] **Test names include classification and numbering** (`[Test N/Total] TYPE - Description`)
+- [ ] **Test names include classification and numbering** (`Test N/Total TYPE - Description`)
+- [ ] **No brackets in test descriptions** (avoid `[Test 1/10]` format)
+- [ ] **Test file placed in correct location** (`src/services/serviceName/__test__/fileName.test.ts`)
+- [ ] **Import paths use @/ prefix** for cross-boundary imports (`@/tests/schemaAllocator`)
 - [ ] **Proper error handling** for negative test cases
 - [ ] **Single-await pattern** for action invocations
 
@@ -591,6 +671,50 @@ await createUserAction({
   name: "Test",
   database: { client: db, schemaName },
 });
+```
+
+### Mistake 5: Wrong Test File Location
+
+```typescript
+// ❌ WRONG - Never place tests in microservices directory
+// File: src/__tests__/microservices/createUserAction.test.ts
+describe("User Tests", () => {
+  // Tests here...
+});
+
+// ✅ CORRECT - Place tests next to the service
+// File: src/services/users/__test__/createUserAction.test.ts
+describe("User Tests", () => {
+  // Tests here...
+});
+```
+
+### Mistake 6: Using Relative Paths for Cross-Boundary Imports
+
+```typescript
+// ❌ WRONG - Never use relative paths for cross-boundary imports
+import { createSchemaAllocator } from "../../../tests/schemaAllocator";
+import { simulateProductionOperation } from "../shared/testHelpers";
+
+// ✅ CORRECT - Always use @/ prefix for cross-boundary imports
+import { createSchemaAllocator } from "@/tests/schemaAllocator";
+import { simulateProductionOperation } from "@/tests/shared/testHelpers";
+
+// ✅ CORRECT - Relative paths are fine for same-directory imports
+import type { CreateUserInput } from "./_data/userSchema";
+import { userService } from "./_data/userService";
+```
+
+### Mistake 7: Using Brackets in Test Descriptions
+
+```typescript
+// ❌ WRONG - Brackets in test descriptions
+it("[Test 1/10] CREATE - Successfully create user", useWriteSchema(...));
+it("[Test 2/10] UPDATE - Update user profile", useWriteSchema(...));
+
+// ✅ CORRECT - No brackets in test descriptions
+it("Test 1/10 CREATE - Successfully create user", useWriteSchema(...));
+it("Test 2/10 UPDATE - Update user profile", useWriteSchema(...));
 ```
 
 ---

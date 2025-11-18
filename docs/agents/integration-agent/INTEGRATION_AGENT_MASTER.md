@@ -167,6 +167,16 @@ useWriteSchema(async ({ db, schemaName }) => { // ❌ db and schemaName are impl
 
 // ❌ WRONG - Don't mix @/ alias for same-level imports (use relative for clarity)
 import { createUserAction } from "@/services/users/actions"; // Use "../actions" instead
+
+// ❌ WRONG - Don't use untyped Prisma queries (causes TypeScript errors)
+const result = await db.$queryRawUnsafe(`SELECT * FROM user`);
+if (Array.isArray(result)) { // result is still 'unknown' type
+  expect(result.length).toBe(1);
+}
+
+// ❌ WRONG - Don't forget to type raw query results
+const verifyResult = await db.$queryRawUnsafe(`SELECT * FROM "${schemaName}".user`);
+expect(verifyResult.length).toBe(1); // TypeScript error: 'verifyResult' is 'unknown'
 ```
 
 #### 🎯 Import Checklist (Verify EVERY Test)
@@ -182,8 +192,10 @@ Before generating test file, verify:
 - [ ] Type imports include: `type TestContext` from schema allocator
 - [ ] Helper imports use: `"@/__tests__/shared/testHelpers"` (for generateTestData only - no simulateProductionOperation)
 - [ ] PrismaClient import: `"@prisma/client"`
+- [ ] Prisma query typing: Type all raw queries: `db.$queryRawUnsafe<UserRow[]>(...)`
 - [ ] Use @/ alias for cross-directory imports, relative for same-level imports
 - [ ] Function parameters are typed: `async ({ db, schemaName }: TestContext)`
+- [ ] All database operations are properly typed to avoid 'unknown' type errors
 
 #### 🚨 CRITICAL: TypeScript Error Prevention
 
@@ -228,6 +240,64 @@ import { createSchemaAllocator, type TestContext } from "@/tests/schemaAllocator
 3. **Missing PrismaClient** → Import `"@prisma/client"`
 4. **Type declarations** → Import `type TestContext` for parameter typing
 5. **Path alias not working** → Verify both `tsconfig.json` and `vitest.config.ts` have `@/` alias configured
+6. **Prisma query types** → Type raw query results properly: `const result = await db.$queryRawUnsafe<...>(...)`
+7. **Unknown type errors** → Use proper typing for Prisma operations
+
+#### 🚨 CRITICAL: Prisma TypeScript Safety
+
+**ALL Prisma Operations Must Be Properly Typed**:
+
+```typescript
+// ✅ CORRECT - Properly typed raw queries
+interface UserRow {
+  id: string;
+  email: string;
+  name: string;
+  "isActive": boolean;
+  "createdAt": Date;
+  "updatedAt": Date;
+}
+
+const verifyResult = await db.$queryRawUnsafe<UserRow[]>(
+  `SELECT * FROM "${schemaName}".user WHERE email = $1`,
+  uniqueEmail
+);
+
+// ✅ CORRECT - Use Prisma model queries (auto-typed)
+const users = await db.user.findMany({
+  where: { email: { contains: searchTerm } }
+});
+
+// ❌ WRONG - Untyped raw queries cause TypeScript errors
+const verifyResult = await db.$queryRawUnsafe(
+  `SELECT * FROM "${schemaName}".user WHERE email = $1`,
+  uniqueEmail
+); // verifyResult is 'unknown' type
+
+// ❌ WRONG - Missing type assertion
+if (Array.isArray(verifyResult)) { // Still unknown type
+  expect(verifyResult.length).toBe(1);
+}
+```
+
+**Prisma Query Best Practices**:
+
+1. **Use typed interfaces** for raw queries: `db.$queryRawUnsafe<UserRow[]>(...)`
+2. **Prefer Prisma model queries** when possible: `db.user.findMany(...)`
+3. **Always type raw query results** to avoid unknown type errors
+4. **Use proper array typing**: `UserRow[]` not just `User`
+
+**Common Prisma TypeScript Errors and Solutions**:
+
+```typescript
+// ❌ ERROR: 'verifyResult' is of type 'unknown'
+const result = await db.$queryRawUnsafe(`SELECT * FROM user`);
+expect(result.length).toBe(1); // TypeScript error
+
+// ✅ SOLUTION: Type the query result
+const result = await db.$queryRawUnsafe<{ id: string; email: string; }[]>(`SELECT * FROM user`);
+expect(result.length).toBe(1); // No error
+```
 
 ---
 
@@ -524,6 +594,55 @@ await searchUsersAction(searchFilters);
 - Not providing default values when they're required
 - Using wrong enum values
 
+### Rule 12: Clean Test Code (NO CONSOLE OUTPUT)
+
+**Tests must be clean with no console statements**
+```typescript
+// ❌ WRONG - No console.log statements in tests
+it("CREATE - Successfully create user", async () => {
+  console.log("Creating user..."); // Don't do this
+  const result = await createUserAction(userData);
+  console.log(`User created with ID: ${result.id}`); // Don't do this
+});
+
+// ❌ WRONG - No console.error for expected failures
+it("VALIDATION - Fail with invalid email", async () => {
+  try {
+    await createUserAction(invalidData);
+  } catch (error) {
+    console.error("Validation failed:", error); // Don't do this
+  }
+});
+
+// ✅ CORRECT - Clean test code with assertions only
+it("CREATE - Successfully create user", async () => {
+  const result = await createUserAction(userData);
+  expect(result.success).toBe(true);
+  expect(result.result.id).toBeDefined();
+});
+
+// ✅ CORRECT - Clean error handling
+it("VALIDATION - Fail with invalid email", async () => {
+  try {
+    await createUserAction(invalidData);
+    expect.fail("Should have thrown validation error");
+  } catch (error) {
+    expect(error).toBeDefined();
+    if (error instanceof Error) {
+      expect(error.message).toMatch(/email/);
+    }
+  }
+});
+```
+
+**Clean Test Requirements:**
+- No `console.log()` statements
+- No `console.error()` statements
+- No `console.warn()` statements
+- No debugging output in tests
+- Use assertions and expectations only
+- Tests should be self-documenting through good naming
+
 ---
 
 ## 📁 SKILLS REFERENCE DOCUMENTATION
@@ -538,19 +657,19 @@ When you need detailed information about each skill, read these files:
 | 1       | Access Infrastructure    | `infrastructure-singleton.md`         | access, infrastructure, containers, logger             |
 | 2       | Place Test File          | `orchestrator-pattern.md`             | place, file, location, naming                          |
 | 3       | Select Schema            | `schema-selection.md`                 | select, schema, database, pick, random                 |
-| 4       | Create Dynamic Schema    | `dynamic-schema-creation.md` (ENHANCED)| create table, setup schema, prepare database           |
-| 5       | Perform CRUD             | `database-operations.md` (ENHANCED)   | create, read, update, delete, CRUD, query (Prisma/SQL) |
-| 6       | Generate Smart Data      | `intelligent-test-data.md` (ENHANCED) | generate unique data, avoid conflicts, smart factory   |
-| 7       | Include Delays           | `production-delays.md`                | delay, timing, production, race, timeout               |
-| 8       | Database-Aware Errors    | `database-error-handling.md` (NEW)    | database errors, specific codes, error patterns        |
-| 9       | Test Errors              | `error-scenarios.md` (ENHANCED)       | error, validation, constraint, not found, edge cases   |
-| 10      | Pattern-Based Generation | `pattern-templates.md` (ENHANCED)     | use template, pattern-based, service/action-specific   |
-| 11      | Self-Healing Tests       | `auto-correction.md` (NEW)            | fix failing tests, auto-correct, self-healing          |
-| 12      | Test Multi-Service       | `multi-service-testing.md`            | multi-service, cross-service, cross-domain             |
-| 13      | **NEW: Test Actions**     | `action-testing-patterns.md` (NEW)    | action, validation, authorization, orchestration       |
-| 14      | **NEW: Action Analysis** | `action-pattern-analysis.md` (NEW)    | analyze action, detect validation, auth patterns       |
-| 15      | Record Metrics           | `test-execution-recording.md`         | record, metrics, log, observability, tracking          |
-| 16      | Verify Quality           | `checklist-integration.md` (ENHANCED) | verify, validate, checklist, quality                   |
+| 4       | Perform CRUD             | `prisma-crud-patterns.md`              | create, read, update, delete, CRUD, query (Prisma)     |
+| 5       | Generate Test Data        | `intelligent-test-data.md`             | generate unique data, avoid conflicts, smart factory   |
+| 6       | Include Production Delays | `production-delays.md`                | delay, timing, production, race, timeout               |
+| 7       | Handle Database Errors    | `error-handling-testing.md`             | database errors, specific codes, error patterns        |
+| 8       | Test Error Scenarios      | `auto-correction.md`                     | error, validation, constraint, not found, edge cases   |
+| 9       | Test Server Actions      | `server-action-calling-patterns.md`  | action, validation, authorization, orchestration       |
+| 10      | Analyze Action Patterns   | `action-pattern-analysis.md`           | analyze action, detect validation, auth patterns       |
+| 11      | Test Multi-Service       | `multi-service-testing.md`            | multi-service, cross-service, cross-domain             |
+| 12      | Record Test Execution    | `test-execution-recording.md`         | record, metrics, log, observability, tracking          |
+| 13      | Verify Test Quality       | `checklist-integration.md`             | verify, validate, checklist, quality                   |
+| 14      | Generate Test Examples     | `test-data-factories.md`                | generate examples, patterns, templates                   |
+| 15      | Analyze Services         | `service-analysis.md`                   | analyze service, detect patterns, methods               |
+| 16      | Auto-Correction Tests     | `auto-correction.md`                     | fix failing tests, auto-correct, self-healing          |
 
 ⭐ **Skill 0 is MANDATORY** - Always analyze service BEFORE generating tests.
 
@@ -2029,6 +2148,7 @@ Step 1: VERIFY IMPORTS (CRITICAL - Prevent Import Errors)
   → PrismaClient: @prisma/client (for type safety)
   → Use @/ alias for cross-directory imports, relative for same-level imports
   → ALL function parameters MUST be typed: `async ({ db, schemaName }: TestContext)`
+  → ALL Prisma operations MUST be typed: `db.$queryRawUnsafe<UserRow[]>(...)`
 
 Step 2: place-test-file
   → FOR ACTIONS: Location: src/services/[serviceName]/__test__/[actionName].action.test.ts
@@ -3760,7 +3880,7 @@ describe("[Test Suite] User Service Actions", () => {
   // Test 1-7: Happy Path (valid operations)
   // Test 8-10: Error Scenarios (invalid data, constraints)
 
-  it("[Test 1/10] CREATE - User created successfully", async () => {
+  it("CREATE - User created successfully", async () => {
     const startTime = Date.now();
     try {
       // ✅ Pattern 1: Inject test database
@@ -3802,7 +3922,7 @@ describe("[Test Suite] User Service Actions", () => {
     }
   });
 
-  it("[Test 2/10] CREATE - Invalid email validation", async () => {
+  it("CREATE - Invalid email validation", async () => {
     // ✅ Validation Error Test
     // Tests schema validation rejection
     const startTime = Date.now();
@@ -3832,7 +3952,7 @@ describe("[Test Suite] User Service Actions", () => {
     }
   });
 
-  it("[Test 3/10] READ - Get user by ID successfully", async () => {
+  it("READ - Get user by ID successfully", async () => {
     // ✅ Service Orchestration Test
     // Tests action → service method call chain
     const startTime = Date.now();
@@ -3867,7 +3987,7 @@ describe("[Test Suite] User Service Actions", () => {
     }
   });
 
-  it("[Test 4/10] READ - User not found (P2025 error)", async () => {
+  it("READ - User not found (P2025 error)", async () => {
     // ✅ Error Handling Test
     // Tests 'not found' scenario (P2025)
     try {
@@ -3895,7 +4015,7 @@ describe("[Test Suite] User Service Actions", () => {
     }
   });
 
-  it("[Test 5/10] UPDATE - User updated successfully", async () => {
+  it("UPDATE - User updated successfully", async () => {
     // ✅ Service Orchestration + Authorization Test
     // Tests update action properly calls service
     try {
@@ -3926,7 +4046,7 @@ describe("[Test Suite] User Service Actions", () => {
     }
   });
 
-  it("[Test 6/10] UPDATE - Partial update (only isActive)", async () => {
+  it("UPDATE - Partial update (only isActive)", async () => {
     // ✅ Optional Field Test
     // Tests UpdateUserSchema allows partial updates
     try {
